@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email to Jira</title>
+  <link rel="stylesheet" href="css/popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Email to Jira</h1>
+    
+    <div id="login-section">
+      <h2>Jira Credentials</h2>
+      <div class="form-group">
+        <label for="jira-url">Jira URL</label>
+        <input type="text" id="jira-url" placeholder="https://your-domain.atlassian.net">
+      </div>
+      <div class="form-group">
+        <label for="api-token">API Token</label>
+        <input type="password" id="api-token" placeholder="Your Jira API token">
+        <div class="help-text">
+          <a href="https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/" target="_blank">How to get an API token</a>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="your.email@example.com">
+      </div>
+      <div class="button-group">
+        <button id="save-credentials">Save Credentials</button>
+        <button id="test-connection" class="secondary-button">Test Connection</button>
+      </div>
+      <div id="status-message"></div>
+    </div>
+
+    <div id="create-ticket-section" style="display: none;">
+      <h2>Create Jira Ticket</h2>
+      <div class="form-group">
+        <label for="project-key">Project Key</label>
+        <input type="text" id="project-key" placeholder="e.g., PROJ">
+      </div>
+      <div class="form-group">
+        <label for="issue-type">Issue Type</label>
+        <select id="issue-type">
+          <option value="Task">Task</option>
+          <option value="Bug">Bug</option>
+          <option value="Story">Story</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="summary">Summary</label>
+        <input type="text" id="summary" placeholder="Ticket summary">
+      </div>
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea id="description" rows="5" placeholder="Ticket description"></textarea>
+      </div>
+      <button id="extract-from-email">Extract from Email</button>
+      <button id="create-ticket">Create Ticket</button>
+      <div id="ticket-status"></div>
+    </div>
+
+    <div class="footer">
+      <button id="options-btn">Options</button>
+      <button id="toggle-view">Switch View</button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html> 

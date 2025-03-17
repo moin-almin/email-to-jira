@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email to Jira - Options</title>
+  <link rel="stylesheet" href="css/options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Email to Jira Options</h1>
+      <p>Configure your Email to Jira extension settings</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Jira Connection</h2>
+        <div class="form-group">
+          <label for="jira-url">Jira URL</label>
+          <input type="text" id="jira-url" placeholder="https://your-domain.atlassian.net">
+          <p class="help-text">The URL of your Jira instance</p>
+        </div>
+        <div class="form-group">
+          <label for="api-token">API Token</label>
+          <input type="password" id="api-token">
+          <p class="help-text">Your Jira API token. <a href="https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/" target="_blank">How to get an API token</a></p>
+        </div>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="your.email@example.com">
+          <p class="help-text">The email associated with your Jira account</p>
+        </div>
+        <button id="test-connection" class="primary-btn">Test Connection</button>
+        <div id="connection-status"></div>
+      </section>
+
+      <section class="card">
+        <h2>Default Settings</h2>
+        <div class="form-group">
+          <label for="default-project">Default Project Key</label>
+          <input type="text" id="default-project" placeholder="e.g., PROJ">
+          <p class="help-text">Your most commonly used Jira project</p>
+        </div>
+        <div class="form-group">
+          <label for="default-issue-type">Default Issue Type</label>
+          <select id="default-issue-type">
+            <option value="Task">Task</option>
+            <option value="Bug">Bug</option>
+            <option value="Story">Story</option>
+          </select>
+          <p class="help-text">The default issue type to use when creating tickets</p>
+        </div>
+        <div class="form-group">
+          <label for="email-template">Email Description Template</label>
+          <textarea id="email-template" rows="8"></textarea>
+          <p class="help-text">Template for formatting email content in ticket description. Available variables: {from}, {to}, {date}, {body}</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Advanced</h2>
+        <div class="form-group">
+          <label for="custom-fields">Custom Fields (JSON)</label>
+          <textarea id="custom-fields" rows="6" placeholder="{&quot;customfield_10001&quot;: &quot;value&quot;}"></textarea>
+          <p class="help-text">Add custom fields to include when creating Jira tickets (JSON format)</p>
+        </div>
+        <div class="form-group">
+          <input type="checkbox" id="include-attachments">
+          <label for="include-attachments">Include email attachments (when supported)</label>
+        </div>
+      </section>
+    </main>
+
+    <div class="actions">
+      <button id="save-btn" class="primary-btn">Save Settings</button>
+      <button id="reset-btn" class="secondary-btn">Reset to Defaults</button>
+    </div>
+
+    <footer>
+      <p>Email to Jira Extension v1.0</p>
+    </footer>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html> 

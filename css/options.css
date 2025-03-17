@@ -1,0 +1,199 @@
+/* Base Styles */
+:root {
+  --primary-color: #0052cc;
+  --primary-hover: #0065ff;
+  --secondary-color: #6b778c;
+  --success-color: #00875a;
+  --error-color: #de350b;
+  --background-color: #f4f5f7;
+  --card-background: #ffffff;
+  --text-color: #172b4d;
+  --border-color: #dfe1e6;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  margin: 0;
+  padding: 0;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Typography */
+h1 {
+  font-size: 24px;
+  color: var(--primary-color);
+  margin-bottom: 8px;
+}
+
+h2 {
+  font-size: 18px;
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--text-color);
+}
+
+/* Header and Footer */
+header {
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+header p {
+  color: var(--secondary-color);
+  margin-top: 0;
+}
+
+footer {
+  margin-top: 40px;
+  text-align: center;
+  color: var(--secondary-color);
+  font-size: 14px;
+}
+
+/* Cards */
+.card {
+  background-color: var(--card-background);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 25px;
+  margin-bottom: 20px;
+}
+
+/* Form Elements */
+.form-group {
+  margin-bottom: 20px;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+select,
+textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary-color);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.2);
+}
+
+.help-text {
+  font-size: 12px;
+  color: var(--secondary-color);
+  margin-top: 5px;
+  margin-bottom: 0;
+}
+
+.help-text a {
+  color: var(--primary-color);
+}
+
+/* Checkbox */
+input[type="checkbox"] {
+  margin-right: 10px;
+}
+
+.form-group input[type="checkbox"] + label {
+  display: inline-block;
+  margin-bottom: 0;
+}
+
+/* Buttons */
+.primary-btn, .secondary-btn {
+  padding: 10px 15px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.primary-btn {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.primary-btn:hover {
+  background-color: var(--primary-hover);
+}
+
+.secondary-btn {
+  background-color: #ebecf0;
+  color: var(--text-color);
+}
+
+.secondary-btn:hover {
+  background-color: #dfe1e6;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 30px;
+}
+
+/* Status messages */
+#connection-status {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.success {
+  background-color: #e3fcef;
+  color: var(--success-color);
+  border: 1px solid #00b368;
+}
+
+.error {
+  background-color: #ffebe6;
+  color: var(--error-color);
+  border: 1px solid #ff5630;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .container {
+    padding: 15px;
+  }
+  
+  .card {
+    padding: 15px;
+  }
+  
+  .actions {
+    flex-direction: column;
+  }
+  
+  .actions button {
+    margin-bottom: 10px;
+  }
+} 
