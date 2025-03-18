@@ -10,35 +10,7 @@
   <div class="container">
     <h1>Email to Jira</h1>
     
-    <div id="login-section">
-      <h2>Jira Credentials</h2>
-      <div class="form-group">
-        <label for="jira-url">Jira URL</label>
-        <input type="text" id="jira-url" placeholder="https://your-domain.atlassian.net">
-      </div>
-      <div class="form-group">
-        <label for="api-token">API Token</label>
-        <input type="password" id="api-token" placeholder="Your Jira API token">
-        <div class="help-text">
-          <a href="https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/" target="_blank">How to get an API token</a>
-        </div>
-      </div>
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input type="email" id="email" placeholder="your.email@example.com">
-      </div>
-      <div class="button-group">
-        <button id="save-credentials">Save Credentials</button>
-        <button id="test-connection" class="secondary-button">Test Connection</button>
-      </div>
-      <div id="status-message"></div>
-      
-      <div id="login-custom-fields-container" style="display: none;">
-        <!-- Custom fields configured in Options will appear here -->
-      </div>
-    </div>
-
-    <div id="create-ticket-section" style="display: none;">
+    <div id="create-ticket-section">
       <h2>Create Jira Ticket</h2>
       <div class="form-group">
         <label for="project-key">Project Key</label>
@@ -62,7 +34,7 @@
       </div>
       <div class="form-group">
         <label>Custom Fields 
-          <span class="tooltip-icon" title="Use the Field Explorer to find field IDs">ⓘ</span>
+          <span class="tooltip-icon" title="Configure custom fields in the Options page">ⓘ</span>
         </label>
         <div class="help-text">
           <a href="#" id="show-field-formats">View formatting guide for different field types</a>
@@ -79,7 +51,6 @@
 
     <div class="footer">
       <button id="options-btn">Options</button>
-      <button id="toggle-view">Switch View</button>
     </div>
   </div>
   <script src="popup.js"></script>
