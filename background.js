@@ -32,10 +32,18 @@ chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
 
 // Handle browser action click
 chrome.action.onClicked.addListener(function(tab) {
-  // Only open popup for email pages
-  const url = tab.url;
-  if (isEmailPage(url)) {
-    // Ensure content script is loaded before popup opens
+  // Check if current page is an email client
+  const url = tab.url || '';
+  const isEmailPage = url.includes('mail.google.com') || 
+                      url.includes('outlook.office.com') || 
+                      url.includes('outlook.live.com');
+  
+  // Open side panel
+  chrome.sidePanel.open({ tabId: tab.id });
+  
+  // Inject content script if on email page
+  if (isEmailPage) {
+    // Ensure content script is loaded
     injectContentScript(tab.id);
   }
 });
@@ -52,6 +60,8 @@ function injectContentScript(tabId) {
   chrome.scripting.executeScript({
     target: { tabId: tabId },
     files: ['content.js']
+  }).then(() => {
+    console.log('Content script injected to tab', tabId);
   }).catch(error => {
     console.error('Error injecting content script:', error);
   });
