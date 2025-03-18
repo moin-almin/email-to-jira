@@ -222,60 +222,120 @@ document.addEventListener('DOMContentLoaded', function() {
       validatedUrl = validatedUrl.slice(0, -1);
     }
     
-    fetchJiraFields(validatedUrl, email, apiToken)
-      .then(fields => {
-        // Display fields
-        fieldsSearchResults.style.display = 'block';
-        fieldsSearchResults.innerHTML = ''; // Clear previous results
-        
-        // Add search box
-        const searchBox = document.createElement('input');
-        searchBox.type = 'text';
-        searchBox.placeholder = 'Search fields...';
-        searchBox.style.width = '100%';
-        searchBox.style.marginBottom = '10px';
-        fieldsSearchResults.appendChild(searchBox);
-        
-        const fieldsContainer = document.createElement('div');
-        fieldsContainer.id = 'fields-container';
-        fieldsSearchResults.appendChild(fieldsContainer);
-        
-        // Display fields
-        displayFields(fields, fieldsContainer);
-        
-        // Add search functionality
-        searchBox.addEventListener('input', function() {
-          const searchTerm = this.value.toLowerCase();
-          const filteredFields = fields.filter(field => 
-            field.id.toLowerCase().includes(searchTerm) || 
-            field.name.toLowerCase().includes(searchTerm) ||
-            (field.schema && field.schema.type && field.schema.type.toLowerCase().includes(searchTerm))
-          );
-          displayFields(filteredFields, fieldsContainer);
-        });
-        
-        // Show success message
-        showConnectionStatus(`Found ${fields.length} fields in your Jira instance.`, 'success');
-      })
-      .catch(error => {
-        console.error('Error fetching Jira fields:', error);
-        showConnectionStatus(`Error: ${error.message}`, 'error');
-      })
-      .finally(() => {
-        exploreFieldsBtn.disabled = false;
+    // Check if we have recent cached data (less than 1 hour old)
+    const cacheKey = `fieldCache_${validatedUrl}_${email}`;
+    const now = Date.now();
+    
+    chrome.storage.local.get([cacheKey, `${cacheKey}_timestamp`], function(data) {
+      const cachedFields = data[cacheKey];
+      const cacheTimestamp = data[`${cacheKey}_timestamp`] || 0;
+      const cacheAge = now - cacheTimestamp;
+      const cacheValid = cacheAge < 60 * 60 * 1000; // 1 hour in milliseconds
+      
+      if (cachedFields && cacheValid) {
+        // Use cached data
+        console.log('Using cached field data from', new Date(cacheTimestamp));
+        showConnectionStatus('Loading fields from cache...', 'success');
+        displayFieldsFromData(cachedFields);
+      } else {
+        // No valid cache, fetch fresh data
+        fetchJiraFields(validatedUrl, email, apiToken)
+          .then(fields => {
+            // Cache the result for 1 hour
+            const cacheData = {};
+            cacheData[cacheKey] = fields;
+            cacheData[`${cacheKey}_timestamp`] = now;
+            chrome.storage.local.set(cacheData);
+            
+            displayFieldsFromData(fields);
+          })
+          .catch(error => {
+            console.error('Error fetching Jira fields:', error);
+            showConnectionStatus(`Error: ${error.message}`, 'error');
+            exploreFieldsBtn.disabled = false;
+          });
+      }
+    });
+    
+    // Helper to display fields from either cache or fresh API call
+    function displayFieldsFromData(fields) {
+      // Display fields
+      fieldsSearchResults.style.display = 'block';
+      fieldsSearchResults.innerHTML = ''; // Clear previous results
+      
+      // Add search box
+      const searchBox = document.createElement('input');
+      searchBox.type = 'text';
+      searchBox.placeholder = 'Search fields...';
+      searchBox.style.width = '100%';
+      searchBox.style.marginBottom = '10px';
+      fieldsSearchResults.appendChild(searchBox);
+      
+      const fieldsContainer = document.createElement('div');
+      fieldsContainer.id = 'fields-container';
+      fieldsSearchResults.appendChild(fieldsContainer);
+      
+      // Add refresh button (to force reload)
+      const refreshBtn = document.createElement('button');
+      refreshBtn.className = 'secondary-btn';
+      refreshBtn.textContent = 'Refresh Fields';
+      refreshBtn.style.marginTop = '10px';
+      refreshBtn.style.fontSize = '12px';
+      refreshBtn.addEventListener('click', function() {
+        // Clear cache for this URL/email combo
+        chrome.storage.local.remove([cacheKey, `${cacheKey}_timestamp`]);
+        // Reload
+        exploreJiraFields();
       });
+      fieldsSearchResults.appendChild(refreshBtn);
+      
+      // Display fields
+      displayFields(fields, fieldsContainer);
+      
+      // Add search functionality
+      searchBox.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const filteredFields = fields.filter(field => 
+          field.id.toLowerCase().includes(searchTerm) || 
+          field.name.toLowerCase().includes(searchTerm) ||
+          (field.schema && field.schema.type && field.schema.type.toLowerCase().includes(searchTerm))
+        );
+        displayFields(filteredFields, fieldsContainer);
+      });
+      
+      // Show success message
+      showConnectionStatus(`Found ${fields.length} fields in your Jira instance.`, 'success');
+      exploreFieldsBtn.disabled = false;
+    }
   }
   
-  // Fetch Jira fields
+  // Fetch Jira fields (optimized version)
   function fetchJiraFields(jiraUrl, email, apiToken) {
-    // Show loading state
-    showConnectionStatus('Fetching Jira field metadata...', '');
+    // Show loading state with progress indicator
+    const progressDiv = document.createElement('div');
+    progressDiv.innerHTML = `
+      <div style="text-align: center; padding: 20px;">
+        <div class="loading-spinner"></div>
+        <p id="fetch-status" style="margin-top: 10px; font-size: 12px;">Fetching field metadata...</p>
+      </div>
+    `;
+    fieldsSearchResults.style.display = 'block';
+    fieldsSearchResults.innerHTML = '';
+    fieldsSearchResults.appendChild(progressDiv);
     
-    // First fetch the field metadata
+    const updateStatus = (message) => {
+      const statusEl = document.getElementById('fetch-status');
+      if (statusEl) statusEl.textContent = message;
+    };
+    
+    // Use Promise.all to fetch field metadata and project metadata concurrently
+    const basicAuth = 'Basic ' + btoa(`${email}:${apiToken}`);
+    
+    // Step 1: First fetch basic field metadata
     return fetch(`${jiraUrl}/rest/api/3/field`, {
       method: 'GET',
       headers: {
-        'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
+        'Authorization': basicAuth,
         'Accept': 'application/json'
       }
     })
@@ -292,120 +352,69 @@ document.addEventListener('DOMContentLoaded', function() {
       return response.json();
     })
     .then(fields => {
-      // Log the initial fields for debugging
-      console.log('Retrieved initial field metadata:', fields);
-      
-      // For each project get available issue types and field metadata
-      return fetch(`${jiraUrl}/rest/api/3/issue/createmeta?expand=projects.issuetypes.fields`, {
-        method: 'GET',
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
-          'Accept': 'application/json'
-        }
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error ${response.status} when fetching issue metadata`);
-        }
-        return response.json();
-      })
-      .then(metaData => {
-        showConnectionStatus('Processing field metadata...', '');
-        console.log('Retrieved issue metadata:', metaData);
+      // Step 2: Get project key if available
+      updateStatus('Fetching metadata for fields...');
+      return chrome.storage.sync.get(['defaultProject']).then(data => {
+        const projectKey = data.defaultProject || '';
+        let metadataUrl = `${jiraUrl}/rest/api/3/issue/createmeta`;
         
-        // Enhanced fields with allowedValues from metadata
-        const enhancedFields = fields.map(field => {
-          const enhancedField = { ...field };
-          
-          // Try to find this field in the metadata to get allowed values and other details
-          if (metaData.projects && metaData.projects.length > 0) {
-            for (const project of metaData.projects) {
+        if (projectKey) {
+          metadataUrl += `?projectKeys=${projectKey}&expand=projects.issuetypes.fields`;
+        } else {
+          // Limit results for faster loading if no specific project
+          metadataUrl += `?expand=projects.issuetypes.fields&maxResults=1`;  
+        }
+        
+        // Fetch issue metadata
+        return fetch(metadataUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': basicAuth,
+            'Accept': 'application/json'
+          }
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error ${response.status} when fetching issue metadata`);
+          }
+          return response.json();
+        })
+        .then(metaData => {
+          updateStatus('Processing field data...');
+          // Enhanced fields with allowedValues from metadata
+          return fields.map(field => {
+            const enhancedField = { ...field };
+            
+            // Try to find this field in the metadata to get allowed values
+            if (metaData.projects && metaData.projects.length > 0) {
+              // Only process first project for speed
+              const project = metaData.projects[0];
               if (project.issuetypes && project.issuetypes.length > 0) {
-                for (const issueType of project.issuetypes) {
-                  if (issueType.fields && issueType.fields[field.id]) {
-                    const fieldMeta = issueType.fields[field.id];
-                    
-                    // Get allowed values if available
-                    if (fieldMeta.allowedValues && fieldMeta.allowedValues.length > 0) {
-                      enhancedField.allowedValues = fieldMeta.allowedValues;
-                    }
-                    
-                    // Get default value if available
-                    if (fieldMeta.defaultValue) {
-                      enhancedField.defaultValue = fieldMeta.defaultValue;
-                    }
-                    
-                    // Get other useful metadata
-                    if (fieldMeta.required !== undefined) {
-                      enhancedField.required = fieldMeta.required;
-                    }
-                    
-                    // Found what we need for this field, break from inner loops
-                    break;
+                // Only process first issue type for speed
+                const issueType = project.issuetypes[0]; 
+                if (issueType.fields && issueType.fields[field.id]) {
+                  const fieldMeta = issueType.fields[field.id];
+                  
+                  // Get allowed values if available
+                  if (fieldMeta.allowedValues && fieldMeta.allowedValues.length > 0) {
+                    enhancedField.allowedValues = fieldMeta.allowedValues;
+                  }
+                  
+                  // Get default value if available
+                  if (fieldMeta.defaultValue) {
+                    enhancedField.defaultValue = fieldMeta.defaultValue;
+                  }
+                  
+                  // Get other useful metadata
+                  if (fieldMeta.required !== undefined) {
+                    enhancedField.required = fieldMeta.required;
                   }
                 }
-                // Break if we found allowed values
-                if (enhancedField.allowedValues) break;
               }
             }
-          }
-          return enhancedField;
+            return enhancedField;
+          });
         });
-        
-        // Now make separate calls for fields that need additional info
-        const fieldPromises = enhancedFields.map(field => {
-          // If it's a select/option type field and we don't have allowedValues yet, try a direct approach
-          if (field.schema && (
-              field.schema.type === 'option' || 
-              field.schema.type === 'array' ||
-              (field.schema.custom && (
-                field.schema.custom.includes('select') ||
-                field.schema.custom.includes('option') ||
-                field.schema.custom.includes('radio') ||
-                field.schema.custom.includes('checkbox')
-              ))
-            ) && !field.allowedValues) {
-              
-            // Try to get field configuration (includes allowed values)
-            return fetch(`${jiraUrl}/rest/api/3/field/${encodeURIComponent(field.id)}/context`, {
-              method: 'GET',
-              headers: {
-                'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
-                'Accept': 'application/json'
-              }
-            })
-            .then(response => response.ok ? response.json() : null)
-            .then(contextData => {
-              if (contextData && contextData.values && contextData.values.length > 0) {
-                field.allowedValues = contextData.values;
-              }
-              
-              // If still no allowed values, try a different endpoint for cascading select
-              if (!field.allowedValues && field.schema.custom && field.schema.custom.includes('cascading')) {
-                return fetch(`${jiraUrl}/rest/api/3/field/${encodeURIComponent(field.id)}/option`, {
-                  method: 'GET',
-                  headers: {
-                    'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
-                    'Accept': 'application/json'
-                  }
-                })
-                .then(response => response.ok ? response.json() : null)
-                .then(optionsData => {
-                  if (optionsData && optionsData.values) {
-                    field.allowedValues = optionsData.values;
-                  }
-                  return field;
-                })
-                .catch(() => field);
-              }
-              return field;
-            })
-            .catch(() => field);
-          }
-          return Promise.resolve(field);
-        });
-        
-        return Promise.all(fieldPromises);
       });
     });
   }
