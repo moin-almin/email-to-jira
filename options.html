@@ -56,6 +56,16 @@
           <textarea id="email-template" rows="8"></textarea>
           <p class="help-text">Template for formatting email content in ticket description. Available variables: {from}, {to}, {date}, {body}</p>
         </div>
+
+        <!-- Jira Field Explorer -->
+        <div class="form-group">
+          <label for="jira-field-explorer">Custom Fields</label>
+          <div class="help-text">Add custom fields that will appear in the ticket creation form</div>
+          <button id="explore-fields" class="secondary-btn" style="margin-top: 10px;">Explore Jira Fields</button>
+          <div id="fields-search-results" class="fields-results" style="display: none;"></div>
+          <div id="default-custom-fields-container" class="custom-fields-container"></div>
+          <button id="add-custom-field" class="tertiary-btn">+ Add Custom Field</button>
+        </div>
       </section>
 
       <section class="card">

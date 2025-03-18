@@ -10,31 +10,7 @@
   <div class="container">
     <h1>Email to Jira</h1>
     
-    <div id="login-section">
-      <h2>Jira Credentials</h2>
-      <div class="form-group">
-        <label for="jira-url">Jira URL</label>
-        <input type="text" id="jira-url" placeholder="https://your-domain.atlassian.net">
-      </div>
-      <div class="form-group">
-        <label for="api-token">API Token</label>
-        <input type="password" id="api-token" placeholder="Your Jira API token">
-        <div class="help-text">
-          <a href="https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/" target="_blank">How to get an API token</a>
-        </div>
-      </div>
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input type="email" id="email" placeholder="your.email@example.com">
-      </div>
-      <div class="button-group">
-        <button id="save-credentials">Save Credentials</button>
-        <button id="test-connection" class="secondary-button">Test Connection</button>
-      </div>
-      <div id="status-message"></div>
-    </div>
-
-    <div id="create-ticket-section" style="display: none;">
+    <div id="create-ticket-section">
       <h2>Create Jira Ticket</h2>
       <div class="form-group">
         <label for="project-key">Project Key</label>
@@ -56,6 +32,18 @@
         <label for="description">Description</label>
         <textarea id="description" rows="5" placeholder="Ticket description"></textarea>
       </div>
+      <div class="form-group">
+        <label>Custom Fields 
+          <span class="tooltip-icon" title="Configure custom fields in the Options page">ⓘ</span>
+        </label>
+        <div class="help-text">
+          <a href="#" id="show-field-formats">View formatting guide for different field types</a>
+          <span style="margin-left: 10px; color: #6B778C;">Configure in <a href="#" id="open-options-fields">Options</a></span>
+        </div>
+        <div id="custom-fields-container">
+          <!-- This will be filled with custom fields from storage -->
+        </div>
+      </div>
       <button id="extract-from-email">Extract from Email</button>
       <button id="create-ticket">Create Ticket</button>
       <div id="ticket-status"></div>
@@ -63,7 +51,6 @@
 
     <div class="footer">
       <button id="options-btn">Options</button>
-      <button id="toggle-view">Switch View</button>
     </div>
   </div>
   <script src="popup.js"></script>

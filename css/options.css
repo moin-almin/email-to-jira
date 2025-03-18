@@ -179,6 +179,140 @@ input[type="checkbox"] {
   border: 1px solid #ff5630;
 }
 
+/* Field Explorer Styles */
+.fields-results {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 13px;
+}
+
+.field-item {
+  padding: 6px;
+  border-bottom: 1px solid #EBECF0;
+}
+
+.field-item:last-child {
+  border-bottom: none;
+}
+
+.field-id {
+  font-weight: bold;
+  color: var(--primary-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.field-name {
+  color: var(--text-color);
+}
+
+.field-type {
+  color: var(--secondary-color);
+  font-size: 12px;
+}
+
+.field-button-group {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.copy-button, .add-button {
+  background-color: #EBECF0;
+  color: #42526E;
+  border: 1px solid #DFE1E6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.add-button {
+  background-color: #E3FCEF;
+  color: #006644;
+  border-color: #ABF5D1;
+}
+
+.copy-button:hover {
+  background-color: #DFE1E6;
+}
+
+.add-button:hover {
+  background-color: #ABF5D1;
+}
+
+.tertiary-btn {
+  background-color: #EBECF0;
+  color: #42526E;
+  border: 1px solid #DFE1E6;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 10px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.tertiary-btn:hover {
+  background-color: #DFE1E6;
+}
+
+/* Custom Fields Container */
+.custom-fields-container {
+  margin-top: 10px;
+}
+
+.custom-field-row {
+  margin-bottom: 12px;
+}
+
+.field-name-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-color);
+  margin-bottom: 4px;
+}
+
+.field-inputs {
+  display: flex;
+  gap: 8px;
+}
+
+.custom-field-id {
+  flex: 1;
+}
+
+.custom-field-id[readonly] {
+  background-color: #F4F5F7;
+  cursor: default;
+  user-select: none;
+}
+
+.custom-field-value {
+  flex: 1;
+}
+
+.remove-field {
+  background-color: #FFF0F1;
+  color: #DE350B;
+  border: 1px solid #FFBDAD;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.remove-field:hover {
+  background-color: #FFEBE6;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .container {

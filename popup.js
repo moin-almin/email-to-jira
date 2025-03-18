@@ -1,124 +1,18 @@
 document.addEventListener('DOMContentLoaded', function() {
   // DOM elements
-  const jiraUrlInput = document.getElementById('jira-url');
-  const apiTokenInput = document.getElementById('api-token');
-  const emailInput = document.getElementById('email');
-  const saveCredentialsBtn = document.getElementById('save-credentials');
-  const testConnectionBtn = document.getElementById('test-connection');
-  const statusMessage = document.getElementById('status-message');
   const projectKeyInput = document.getElementById('project-key');
   const issueTypeSelect = document.getElementById('issue-type');
   const summaryInput = document.getElementById('summary');
   const descriptionInput = document.getElementById('description');
+  const customFieldsContainer = document.getElementById('custom-fields-container');
+  const showFieldFormatsBtn = document.getElementById('show-field-formats');
   const createTicketBtn = document.getElementById('create-ticket');
   const extractFromEmailBtn = document.getElementById('extract-from-email');
   const ticketStatus = document.getElementById('ticket-status');
   const optionsBtn = document.getElementById('options-btn');
-  const toggleViewBtn = document.getElementById('toggle-view');
-  const loginSection = document.getElementById('login-section');
-  const createTicketSection = document.getElementById('create-ticket-section');
 
   // Load saved credentials and preferences
   loadSavedData();
-
-  // Save credentials
-  saveCredentialsBtn.addEventListener('click', function() {
-    const jiraUrl = jiraUrlInput.value.trim();
-    const apiToken = apiTokenInput.value.trim();
-    const email = emailInput.value.trim();
-
-    if (!jiraUrl || !apiToken || !email) {
-      showStatusMessage(statusMessage, 'Please fill in all fields.', 'error');
-      return;
-    }
-
-    // Validate URL format
-    if (!isValidUrl(jiraUrl)) {
-      showStatusMessage(statusMessage, 'Please enter a valid Jira URL.', 'error');
-      return;
-    }
-
-    // Save to chrome.storage
-    chrome.storage.sync.set({
-      jiraUrl: jiraUrl,
-      apiToken: apiToken,
-      email: email
-    }, function() {
-      showStatusMessage(statusMessage, 'Credentials saved successfully!', 'success');
-      // Switch to create ticket view
-      loginSection.style.display = 'none';
-      createTicketSection.style.display = 'block';
-    });
-  });
-
-  // Test Jira connection
-  testConnectionBtn.addEventListener('click', function() {
-    const jiraUrl = jiraUrlInput.value.trim();
-    const apiToken = apiTokenInput.value.trim();
-    const email = emailInput.value.trim();
-
-    if (!jiraUrl || !apiToken || !email) {
-      showStatusMessage(statusMessage, 'Please fill in all fields.', 'error');
-      return;
-    }
-
-    // Validate URL format
-    let validatedUrl = jiraUrl;
-    try {
-      // Ensure URL has protocol
-      if (!validatedUrl.startsWith('http://') && !validatedUrl.startsWith('https://')) {
-        validatedUrl = 'https://' + validatedUrl;
-      }
-      new URL(validatedUrl);
-    } catch (e) {
-      showStatusMessage(statusMessage, `Error: Invalid Jira URL format`, 'error');
-      return;
-    }
-
-    // Show testing status
-    showStatusMessage(statusMessage, 'Testing connection...', '');
-    testConnectionBtn.disabled = true;
-    
-    testJiraConnection(validatedUrl, email, apiToken)
-      .then(result => {
-        const userName = result.displayName ? ` as ${result.displayName}` : '';
-        showStatusMessage(statusMessage, `Connection successful${userName}!`, 'success');
-      })
-      .catch(error => {
-        console.error('Connection test error:', error);
-        
-        let errorMessage = `Connection failed: ${error.message}`;
-        let troubleshootingTips = '';
-        
-        if (error.message.includes('Authentication failed') || error.message.includes('401')) {
-          troubleshootingTips = `
-            <div class="help-text" style="margin-top: 10px;">
-              <p>• Check your email address and API token</p>
-              <p>• Make sure you're using an API token, not your Jira password</p>
-              <p>• <a href="https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/" target="_blank">Generate a new API token</a></p>
-            </div>
-          `;
-        } else if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
-          troubleshootingTips = `
-            <div class="help-text" style="margin-top: 10px;">
-              <p>• Check your Jira URL format (should be https://your-domain.atlassian.net)</p>
-              <p>• Verify your internet connection</p>
-              <p>• Your Jira instance might not allow API access from browser extensions</p>
-            </div>
-          `;
-        }
-        
-        showStatusMessage(statusMessage, errorMessage, 'error');
-        if (troubleshootingTips) {
-          const helpText = document.createElement('div');
-          helpText.innerHTML = troubleshootingTips;
-          statusMessage.appendChild(helpText);
-        }
-      })
-      .finally(() => {
-        testConnectionBtn.disabled = false;
-      });
-  });
 
   // Extract info from current email
   extractFromEmailBtn.addEventListener('click', function() {
@@ -256,20 +150,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Create Jira ticket
   createTicketBtn.addEventListener('click', function() {
+    // Save custom fields before creating the ticket
+    saveCustomFields();
     createJiraTicket();
-  });
-
-  // Toggle between login and create ticket views
-  toggleViewBtn.addEventListener('click', function() {
-    if (loginSection.style.display === 'none') {
-      loginSection.style.display = 'block';
-      createTicketSection.style.display = 'none';
-      toggleViewBtn.textContent = 'Create Ticket';
-    } else {
-      loginSection.style.display = 'none';
-      createTicketSection.style.display = 'block';
-      toggleViewBtn.textContent = 'Settings';
-    }
   });
 
   // Open options page
@@ -277,20 +160,159 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.runtime.openOptionsPage();
   });
 
+  // Open options page from custom fields link
+  document.getElementById('open-options-fields').addEventListener('click', function(e) {
+    e.preventDefault();
+    chrome.runtime.openOptionsPage();
+  });
+
+  // Show field formats guide
+  showFieldFormatsBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    
+    // Check if the guide already exists
+    if (document.getElementById('field-formats-guide')) {
+      document.getElementById('field-formats-guide').remove();
+      return;
+    }
+    
+    const guide = document.createElement('div');
+    guide.id = 'field-formats-guide';
+    guide.className = 'field-formats-guide';
+    
+    guide.innerHTML = `
+      <h4 style="margin-top: 0;">Field Value Formats:</h4>
+      <ul style="padding-left: 20px; margin-bottom: 10px;">
+        <li><strong>Text fields:</strong> <span class="field-format-example">"Your text here"</span></li>
+        <li><strong>Number fields:</strong> <span class="field-format-example">42</span> (no quotes)</li>
+        <li><strong>Date fields:</strong> <span class="field-format-example">"2023-07-30"</span> (ISO format)</li>
+        <li><strong>Select/Option fields:</strong> <span class="field-format-example">{"value": "Option value"}</span></li>
+        <li><strong>Multi-select fields:</strong> <span class="field-format-example">[{"value": "Option 1"}, {"value": "Option 2"}]</span></li>
+        <li><strong>User picker:</strong> <span class="field-format-example">{"name": "username"}</span> or <span class="field-format-example">{"accountId": "user-account-id"}</span></li>
+        <li><strong>Checkbox:</strong> <span class="field-format-example">true</span> or <span class="field-format-example">false</span> (no quotes)</li>
+      </ul>
+      <p style="margin-bottom: 0;"><strong>Tip:</strong> Configure field IDs in the Options page.</p>
+    `;
+    
+    // Insert the guide after the link
+    showFieldFormatsBtn.parentElement.after(guide);
+  });
+
+  // Function to save custom fields
+  function saveCustomFields() {
+    const customFields = [];
+    const rows = customFieldsContainer.querySelectorAll('.custom-field-row');
+    
+    rows.forEach(row => {
+      const idInput = row.querySelector('.custom-field-id');
+      const valueInput = row.querySelector('.custom-field-value');
+      const nameLabel = row.querySelector('.field-name-label');
+      
+      if (idInput && idInput.value) {
+        customFields.push({
+          id: idInput.value,
+          value: valueInput ? valueInput.value : '',
+          name: nameLabel ? nameLabel.textContent : '',
+          readonly: true // All fields in popup are readonly for ID
+        });
+      }
+    });
+    
+    chrome.storage.sync.set({ 'customFields': customFields }, function() {
+      console.log('Custom fields saved');
+    });
+  }
+  
+  // Function to restore custom fields
+  function restoreCustomFields() {
+    chrome.storage.sync.get(['customFields', 'customFieldsArray'], function(data) {
+      // Prioritize customFieldsArray (from options page) if it exists
+      const fieldsToUse = data.customFieldsArray && data.customFieldsArray.length > 0 
+                           ? data.customFieldsArray 
+                           : (data.customFields && data.customFields.length > 0 ? data.customFields : []);
+      
+      if (fieldsToUse.length > 0) {
+        // Clear existing fields
+        customFieldsContainer.innerHTML = '';
+        
+        // Add saved fields to container
+        fieldsToUse.forEach(field => {
+          createCustomFieldRow(field, customFieldsContainer);
+        });
+      }
+    });
+  }
+  
+  // Helper function to create a custom field row
+  function createCustomFieldRow(field, container) {
+    const newRow = document.createElement('div');
+    newRow.className = 'custom-field-row';
+    
+    // Add field name label if available
+    if (field.name) {
+      const fieldLabel = document.createElement('div');
+      fieldLabel.className = 'field-name-label';
+      fieldLabel.textContent = field.name;
+      newRow.appendChild(fieldLabel);
+    }
+    
+    // Field inputs container
+    const fieldInputs = document.createElement('div');
+    fieldInputs.className = 'field-inputs';
+    
+    const fieldIdInput = document.createElement('input');
+    fieldIdInput.type = 'text';
+    fieldIdInput.className = 'custom-field-id';
+    fieldIdInput.value = field.id;
+    fieldIdInput.readOnly = true;
+    fieldIdInput.title = field.name || field.id;
+    fieldInputs.appendChild(fieldIdInput);
+    
+    const fieldValueInput = document.createElement('input');
+    fieldValueInput.type = 'text';
+    fieldValueInput.className = 'custom-field-value';
+    fieldValueInput.value = field.value;
+    fieldValueInput.placeholder = 'Field Value';
+    fieldInputs.appendChild(fieldValueInput);
+    
+    const removeButton = document.createElement('button');
+    removeButton.className = 'remove-field';
+    removeButton.textContent = '✕';
+    removeButton.style.visibility = 'hidden'; // Hide remove button in popup
+    fieldInputs.appendChild(removeButton);
+    
+    newRow.appendChild(fieldInputs);
+    container.appendChild(newRow);
+    
+    // Add change listener for field value
+    fieldValueInput.addEventListener('change', saveCustomFields);
+  }
+
   // Helper functions
   function loadSavedData() {
-    chrome.storage.sync.get(['jiraUrl', 'apiToken', 'email', 'projectKey'], function(data) {
-      if (data.jiraUrl) jiraUrlInput.value = data.jiraUrl;
-      if (data.apiToken) apiTokenInput.value = data.apiToken;
-      if (data.email) emailInput.value = data.email;
-      if (data.projectKey) projectKeyInput.value = data.projectKey;
-
-      // If credentials are already set, show create ticket view by default
-      if (data.jiraUrl && data.apiToken && data.email) {
-        loginSection.style.display = 'none';
-        createTicketSection.style.display = 'block';
-        toggleViewBtn.textContent = 'Settings';
+    // Load custom fields
+    restoreCustomFields();
+    
+    // Load project key if available - check multiple possible keys
+    chrome.storage.sync.get(['projectKey', 'jiraProjectKey', 'defaultProjectKey', 'defaultProject'], function(data) {
+      // Try different possible storage keys, in order of preference
+      if (data.projectKey) {
+        projectKeyInput.value = data.projectKey;
+      } else if (data.defaultProject) {
+        projectKeyInput.value = data.defaultProject;
+        // Also save as projectKey for future consistency
+        chrome.storage.sync.set({ projectKey: data.defaultProject });
+      } else if (data.jiraProjectKey) {
+        projectKeyInput.value = data.jiraProjectKey;
+        // Also save as projectKey for future consistency
+        chrome.storage.sync.set({ projectKey: data.jiraProjectKey });
+      } else if (data.defaultProjectKey) {
+        projectKeyInput.value = data.defaultProjectKey;
+        // Also save as projectKey for future consistency
+        chrome.storage.sync.set({ projectKey: data.defaultProjectKey });
       }
+      
+      console.log('Project key loaded:', projectKeyInput.value);
     });
   }
 
@@ -298,10 +320,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get Jira credentials
     chrome.storage.sync.get(['jiraUrl', 'apiToken', 'email'], function(data) {
       if (!data.jiraUrl || !data.apiToken || !data.email) {
-        showStatusMessage(ticketStatus, 'Jira credentials not set. Please go to settings.', 'error');
+        showStatusMessage(ticketStatus, 'Jira credentials not set. Please go to the Options page to configure them.', 'error');
         return;
       }
-
+      
+      // Store jiraUrl in a variable accessible throughout this function
+      const jiraUrl = data.jiraUrl;
       const projectKey = projectKeyInput.value.trim();
       const issueType = issueTypeSelect.value;
       const summary = summaryInput.value.trim();
@@ -319,6 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const url = `${data.jiraUrl}/rest/api/2/issue/`;
       const auth = btoa(`${data.email}:${data.apiToken}`);
 
+      // Prepare payload with standard fields
       const payload = {
         fields: {
           project: {
@@ -331,6 +356,27 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
       };
+      
+      // Add custom fields to payload
+      const customFieldRows = document.querySelectorAll('.custom-field-row');
+      customFieldRows.forEach(row => {
+        const fieldId = row.querySelector('.custom-field-id').value.trim();
+        const fieldValue = row.querySelector('.custom-field-value').value.trim();
+        
+        if (fieldId && fieldValue) {
+          try {
+            // Try to parse as JSON first for complex values
+            try {
+              payload.fields[fieldId] = JSON.parse(fieldValue);
+            } catch (e) {
+              // If not valid JSON, use as string
+              payload.fields[fieldId] = fieldValue;
+            }
+          } catch (e) {
+            console.error('Error adding custom field:', e);
+          }
+        }
+      });
 
       showStatusMessage(ticketStatus, 'Creating ticket...', '');
       createTicketBtn.disabled = true;
@@ -352,7 +398,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return response.json();
       })
       .then(data => {
-        const ticketUrl = `${jiraUrlInput.value}/browse/${data.key}`;
+        const ticketUrl = `${jiraUrl}/browse/${data.key}`;
         showStatusMessage(ticketStatus, `Ticket created successfully! <a href="${ticketUrl}" target="_blank">${data.key}</a>`, 'success');
         
         // Clear form fields
