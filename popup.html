@@ -32,6 +32,10 @@
         <button id="test-connection" class="secondary-button">Test Connection</button>
       </div>
       <div id="status-message"></div>
+      
+      <div id="login-custom-fields-container" style="display: none;">
+        <!-- Custom fields configured in Options will appear here -->
+      </div>
     </div>
 
     <div id="create-ticket-section" style="display: none;">
@@ -55,6 +59,18 @@
       <div class="form-group">
         <label for="description">Description</label>
         <textarea id="description" rows="5" placeholder="Ticket description"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Custom Fields 
+          <span class="tooltip-icon" title="Use the Field Explorer to find field IDs">ⓘ</span>
+        </label>
+        <div class="help-text">
+          <a href="#" id="show-field-formats">View formatting guide for different field types</a>
+          <span style="margin-left: 10px; color: #6B778C;">Configure in <a href="#" id="open-options-fields">Options</a></span>
+        </div>
+        <div id="custom-fields-container">
+          <!-- This will be filled with custom fields from storage -->
+        </div>
       </div>
       <button id="extract-from-email">Extract from Email</button>
       <button id="create-ticket">Create Ticket</button>

@@ -5,11 +5,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const emailInput = document.getElementById('email');
   const saveCredentialsBtn = document.getElementById('save-credentials');
   const testConnectionBtn = document.getElementById('test-connection');
+  const loginCustomFieldsContainer = document.getElementById('login-custom-fields-container');
   const statusMessage = document.getElementById('status-message');
   const projectKeyInput = document.getElementById('project-key');
   const issueTypeSelect = document.getElementById('issue-type');
   const summaryInput = document.getElementById('summary');
   const descriptionInput = document.getElementById('description');
+  const customFieldsContainer = document.getElementById('custom-fields-container');
+  const showFieldFormatsBtn = document.getElementById('show-field-formats');
   const createTicketBtn = document.getElementById('create-ticket');
   const extractFromEmailBtn = document.getElementById('extract-from-email');
   const ticketStatus = document.getElementById('ticket-status');
@@ -45,6 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
       email: email
     }, function() {
       showStatusMessage(statusMessage, 'Credentials saved successfully!', 'success');
+      
       // Switch to create ticket view
       loginSection.style.display = 'none';
       createTicketSection.style.display = 'block';
@@ -83,6 +87,13 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(result => {
         const userName = result.displayName ? ` as ${result.displayName}` : '';
         showStatusMessage(statusMessage, `Connection successful${userName}!`, 'success');
+        
+        // Save credentials
+        chrome.storage.sync.set({
+          jiraUrl: jiraUrl,
+          apiToken: apiToken,
+          email: email
+        });
       })
       .catch(error => {
         console.error('Connection test error:', error);
@@ -256,6 +267,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Create Jira ticket
   createTicketBtn.addEventListener('click', function() {
+    // Save custom fields before creating the ticket
+    saveCustomFields();
     createJiraTicket();
   });
 
@@ -265,6 +278,13 @@ document.addEventListener('DOMContentLoaded', function() {
       loginSection.style.display = 'block';
       createTicketSection.style.display = 'none';
       toggleViewBtn.textContent = 'Create Ticket';
+      
+      // Make sure the custom fields container is visible if we have credentials
+      chrome.storage.sync.get(['jiraUrl', 'apiToken', 'email'], function(data) {
+        if (data.jiraUrl && data.apiToken && data.email) {
+          loginCustomFieldsContainer.style.display = 'block';
+        }
+      });
     } else {
       loginSection.style.display = 'none';
       createTicketSection.style.display = 'block';
@@ -277,8 +297,203 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.runtime.openOptionsPage();
   });
 
+  // Open options page from custom fields link
+  document.getElementById('open-options-fields').addEventListener('click', function(e) {
+    e.preventDefault();
+    chrome.runtime.openOptionsPage();
+  });
+
+  // Show field formats guide
+  showFieldFormatsBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    
+    // Check if the guide already exists
+    if (document.getElementById('field-formats-guide')) {
+      document.getElementById('field-formats-guide').remove();
+      return;
+    }
+    
+    const guide = document.createElement('div');
+    guide.id = 'field-formats-guide';
+    guide.className = 'field-formats-guide';
+    
+    guide.innerHTML = `
+      <h4 style="margin-top: 0;">Field Value Formats:</h4>
+      <ul style="padding-left: 20px; margin-bottom: 10px;">
+        <li><strong>Text fields:</strong> <span class="field-format-example">"Your text here"</span></li>
+        <li><strong>Number fields:</strong> <span class="field-format-example">42</span> (no quotes)</li>
+        <li><strong>Date fields:</strong> <span class="field-format-example">"2023-07-30"</span> (ISO format)</li>
+        <li><strong>Select/Option fields:</strong> <span class="field-format-example">{"value": "Option value"}</span></li>
+        <li><strong>Multi-select fields:</strong> <span class="field-format-example">[{"value": "Option 1"}, {"value": "Option 2"}]</span></li>
+        <li><strong>User picker:</strong> <span class="field-format-example">{"name": "username"}</span> or <span class="field-format-example">{"accountId": "user-account-id"}</span></li>
+        <li><strong>Checkbox:</strong> <span class="field-format-example">true</span> or <span class="field-format-example">false</span> (no quotes)</li>
+      </ul>
+      <p style="margin-bottom: 0;"><strong>Tip:</strong> Use the Field Explorer to find field IDs and types.</p>
+    `;
+    
+    // Insert the guide after the link
+    showFieldFormatsBtn.parentElement.after(guide);
+  });
+
+  // Function to save custom fields
+  function saveCustomFields() {
+    const customFields = [];
+    
+    // Get fields from login section
+    document.querySelectorAll('#login-custom-fields-container .custom-field-row').forEach(row => {
+      const fieldId = row.querySelector('.custom-field-id');
+      const fieldValue = row.querySelector('.custom-field-value');
+      
+      if (fieldId && fieldValue && fieldId.value.trim()) {
+        // Get the field name label if it exists
+        const fieldNameLabel = row.querySelector('.field-name-label');
+        const fieldName = fieldNameLabel ? fieldNameLabel.textContent : '';
+        
+        customFields.push({
+          id: fieldId.value.trim(),
+          value: fieldValue.value.trim(),
+          name: fieldName,
+          readonly: fieldId.readOnly
+        });
+      }
+    });
+    
+    // Also check ticket creation section (for backward compatibility)
+    document.querySelectorAll('#custom-fields-container .custom-field-row').forEach(row => {
+      const fieldId = row.querySelector('.custom-field-id');
+      const fieldValue = row.querySelector('.custom-field-value');
+      
+      if (fieldId && fieldValue && fieldId.value.trim()) {
+        // Check if this field is already in the array
+        const existingField = customFields.find(f => f.id === fieldId.value.trim());
+        if (!existingField) {
+          const fieldNameLabel = row.querySelector('.field-name-label');
+          const fieldName = fieldNameLabel ? fieldNameLabel.textContent : '';
+          
+          customFields.push({
+            id: fieldId.value.trim(),
+            value: fieldValue.value.trim(),
+            name: fieldName,
+            readonly: fieldId.readOnly
+          });
+        }
+      }
+    });
+    
+    // Save to both storage keys for compatibility
+    chrome.storage.sync.set({ 
+      customFields: customFields,
+      customFieldsArray: customFields 
+    }, function() {
+      console.log('Custom fields saved:', customFields);
+      
+      // Also create a JSON object format for the Advanced tab in options
+      const customFieldsJson = {};
+      customFields.forEach(field => {
+        try {
+          // Try to parse as JSON first for complex values
+          try {
+            customFieldsJson[field.id] = JSON.parse(field.value);
+          } catch (e) {
+            // If not valid JSON, use as string
+            customFieldsJson[field.id] = field.value;
+          }
+        } catch (e) {
+          console.error('Error adding custom field to JSON:', e);
+        }
+      });
+      
+      // Save the JSON format as well
+      chrome.storage.sync.set({ customFieldsJson: JSON.stringify(customFieldsJson, null, 2) });
+    });
+  }
+  
+  // Function to restore custom fields
+  function restoreCustomFields() {
+    chrome.storage.sync.get(['customFields', 'customFieldsArray'], function(data) {
+      // Prioritize customFieldsArray (from options page) if it exists
+      const fieldsToUse = data.customFieldsArray && data.customFieldsArray.length > 0 
+                           ? data.customFieldsArray 
+                           : (data.customFields && data.customFields.length > 0 ? data.customFields : []);
+      
+      if (fieldsToUse.length > 0) {
+        // Clear existing fields in both containers
+        customFieldsContainer.innerHTML = '';
+        loginCustomFieldsContainer.innerHTML = '';
+        
+        // Add saved fields to both containers
+        fieldsToUse.forEach(field => {
+          // Create row for the login section
+          createCustomFieldRow(field, loginCustomFieldsContainer);
+          
+          // Create row for the ticket creation section
+          createCustomFieldRow(field, customFieldsContainer);
+        });
+      }
+    });
+  }
+  
+  // Helper function to create a custom field row
+  function createCustomFieldRow(field, container) {
+    const newRow = document.createElement('div');
+    newRow.className = 'custom-field-row';
+    
+    // Add field name label if available
+    if (field.name) {
+      const fieldLabel = document.createElement('div');
+      fieldLabel.className = 'field-name-label';
+      fieldLabel.textContent = field.name;
+      newRow.appendChild(fieldLabel);
+    }
+    
+    // Field inputs container
+    const fieldInputs = document.createElement('div');
+    fieldInputs.className = 'field-inputs';
+    
+    const fieldIdInput = document.createElement('input');
+    fieldIdInput.type = 'text';
+    fieldIdInput.className = 'custom-field-id';
+    fieldIdInput.value = field.id;
+    fieldIdInput.readOnly = true;
+    fieldIdInput.title = field.name || field.id;
+    fieldInputs.appendChild(fieldIdInput);
+    
+    const fieldValueInput = document.createElement('input');
+    fieldValueInput.type = 'text';
+    fieldValueInput.className = 'custom-field-value';
+    fieldValueInput.value = field.value;
+    fieldValueInput.placeholder = 'Field Value';
+    fieldInputs.appendChild(fieldValueInput);
+    
+    const removeButton = document.createElement('button');
+    removeButton.className = 'remove-field';
+    removeButton.textContent = '✕';
+    removeButton.style.visibility = 'hidden'; // Hide remove button in popup
+    fieldInputs.appendChild(removeButton);
+    
+    newRow.appendChild(fieldInputs);
+    container.appendChild(newRow);
+    
+    // Only add change listener for field value
+    fieldValueInput.addEventListener('change', function() {
+      // Update the same field in the other container
+      const otherContainer = container === customFieldsContainer ? 
+                            loginCustomFieldsContainer : customFieldsContainer;
+      const otherIdInputs = otherContainer.querySelectorAll(`.custom-field-id[value="${field.id}"]`);
+      otherIdInputs.forEach(input => {
+        const row = input.closest('.custom-field-row');
+        const valueInput = row.querySelector('.custom-field-value');
+        if (valueInput) valueInput.value = this.value;
+      });
+      saveCustomFields();
+    });
+  }
+
   // Helper functions
   function loadSavedData() {
+    // Always load custom fields first to ensure they're available
+    restoreCustomFields();
+    
     chrome.storage.sync.get(['jiraUrl', 'apiToken', 'email', 'projectKey'], function(data) {
       if (data.jiraUrl) jiraUrlInput.value = data.jiraUrl;
       if (data.apiToken) apiTokenInput.value = data.apiToken;
@@ -287,6 +502,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // If credentials are already set, show create ticket view by default
       if (data.jiraUrl && data.apiToken && data.email) {
+        // Show custom fields container in login section
+        loginCustomFieldsContainer.style.display = 'block';
+        
+        // Also show ticket creation section by default
         loginSection.style.display = 'none';
         createTicketSection.style.display = 'block';
         toggleViewBtn.textContent = 'Settings';
@@ -319,6 +538,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const url = `${data.jiraUrl}/rest/api/2/issue/`;
       const auth = btoa(`${data.email}:${data.apiToken}`);
 
+      // Prepare payload with standard fields
       const payload = {
         fields: {
           project: {
@@ -331,6 +551,27 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
       };
+      
+      // Add custom fields to payload
+      const customFieldRows = document.querySelectorAll('.custom-field-row');
+      customFieldRows.forEach(row => {
+        const fieldId = row.querySelector('.custom-field-id').value.trim();
+        const fieldValue = row.querySelector('.custom-field-value').value.trim();
+        
+        if (fieldId && fieldValue) {
+          try {
+            // Try to parse as JSON first for complex values
+            try {
+              payload.fields[fieldId] = JSON.parse(fieldValue);
+            } catch (e) {
+              // If not valid JSON, use as string
+              payload.fields[fieldId] = fieldValue;
+            }
+          } catch (e) {
+            console.error('Error adding custom field:', e);
+          }
+        }
+      });
 
       showStatusMessage(ticketStatus, 'Creating ticket...', '');
       createTicketBtn.disabled = true;
