@@ -9,8 +9,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const ticketStatus = document.getElementById('ticket-status');
   const customFieldsContainer = document.getElementById('custom-fields-container');
   const optionsBtn = document.getElementById('options-btn');
-  const showFieldFormatsLink = document.getElementById('show-field-formats');
-  const openOptionsFieldsLink = document.getElementById('open-options-fields');
 
   // Load saved data
   loadSavedData();
@@ -148,37 +146,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Open options page
   optionsBtn.addEventListener('click', function() {
-    chrome.runtime.openOptionsPage();
-  });
-
-  // Open formatting guide
-  showFieldFormatsLink.addEventListener('click', function(e) {
-    e.preventDefault();
-    
-    const formatGuideEl = document.querySelector('.field-formats-guide');
-    if (formatGuideEl) {
-      formatGuideEl.style.display = formatGuideEl.style.display === 'none' ? 'block' : 'none';
-      return;
-    }
-    
-    const formatsGuide = document.createElement('div');
-    formatsGuide.className = 'field-formats-guide';
-    formatsGuide.innerHTML = `
-      <p><strong>Field Formats:</strong></p>
-      <div>Date: <span class="field-format-example">YYYY-MM-DD</span> (e.g., 2023-04-15)</div>
-      <div>DateTime: <span class="field-format-example">YYYY-MM-DD HH:MM</span> (e.g., 2023-04-15 14:30)</div>
-      <div>User: <span class="field-format-example">username</span> or <span class="field-format-example">account_id</span></div>
-      <div>Select: Use exact value from allowed values only</div>
-      <div>Number: <span class="field-format-example">42</span></div>
-    `;
-    
-    // Insert after the link
-    showFieldFormatsLink.parentNode.insertBefore(formatsGuide, showFieldFormatsLink.nextSibling);
-  });
-
-  // Open options page to field section
-  openOptionsFieldsLink.addEventListener('click', function(e) {
-    e.preventDefault();
     chrome.runtime.openOptionsPage();
   });
 

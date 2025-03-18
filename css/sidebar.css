@@ -190,22 +190,6 @@ button:active {
   background-color: #8777d9;
 }
 
-/* Help text */
-.help-text {
-  font-size: 11px;
-  margin-top: 2px;
-  color: #6B778C;
-}
-
-.help-text a {
-  color: #0052cc;
-  text-decoration: none;
-}
-
-.help-text a:hover {
-  text-decoration: underline;
-}
-
 /* Tooltip */
 .tooltip-icon {
   display: inline-block;
@@ -219,25 +203,6 @@ button:active {
   color: white;
   border-radius: 50%;
   cursor: help;
-}
-
-/* Field formats guide */
-.field-formats-guide {
-  display: none;
-  margin-top: 8px;
-  padding: 8px;
-  background-color: #f4f5f7;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.field-format-example {
-  margin-top: 5px;
-  padding: 4px;
-  background-color: #fff;
-  border: 1px solid #dfe1e6;
-  border-radius: 3px;
-  font-size: 11px;
 }
 
 /* Developer credit */
