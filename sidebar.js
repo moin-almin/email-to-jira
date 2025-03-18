@@ -263,6 +263,8 @@ document.addEventListener('DOMContentLoaded', function() {
       customFieldRows.forEach(row => {
         const fieldId = row.dataset.fieldId;
         const fieldInput = row.querySelector('.custom-field-value');
+        const fieldType = row.dataset.fieldType;
+        const allowedValues = row.dataset.fieldAllowedValues ? JSON.parse(row.dataset.fieldAllowedValues) : null;
         
         // Only process if we have a valid field ID and input
         if (fieldId && fieldInput) {
@@ -280,17 +282,29 @@ document.addEventListener('DOMContentLoaded', function() {
               } else if (selectedValue === 'false') {
                 fieldValue = false;
               } 
+              // For dropdown fields with complex objects (like components, users, etc.)
+              else if (allowedValues && allowedValues.length > 0) {
+                // Try to find the matching allowed value
+                const matchingValue = allowedValues.find(v => 
+                  (v.id && v.id === selectedValue) || 
+                  (v.value && v.value === selectedValue)
+                );
+                
+                if (matchingValue) {
+                  // If it's an object with id property, use that format
+                  if (matchingValue.id) {
+                    fieldValue = { id: matchingValue.id };
+                  } else {
+                    fieldValue = matchingValue;
+                  }
+                } else {
+                  // If no matching complex object, use the value directly
+                  fieldValue = selectedValue;
+                }
+              }
               // For numeric values
               else if (!isNaN(selectedValue)) {
                 fieldValue = Number(selectedValue);
-              } 
-              // For JSON object values
-              else if (selectedValue.startsWith('{') && selectedValue.endsWith('}')) {
-                try {
-                  fieldValue = JSON.parse(selectedValue);
-                } catch (e) {
-                  fieldValue = selectedValue;
-                }
               } 
               // Default - use string value
               else {
@@ -326,6 +340,8 @@ document.addEventListener('DOMContentLoaded', function() {
       showStatusMessage(ticketStatus, 'Creating Jira ticket...', '');
       createTicketBtn.disabled = true;
       
+      console.log('Sending payload to Jira:', payload);
+      
       // Make API request to create Jira ticket
       fetch(url, {
         method: 'POST',
@@ -337,14 +353,33 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .then(response => {
         if (!response.ok) {
-          return response.json().then(errorData => {
-            throw new Error(
-              `${response.status} ${response.statusText}: ${
-                errorData.errorMessages ? 
-                errorData.errorMessages.join(', ') : 
-                JSON.stringify(errorData.errors || errorData)
-              }`
-            );
+          return response.text().then(text => {
+            let errorData;
+            try {
+              errorData = JSON.parse(text);
+            } catch (e) {
+              throw new Error(`${response.status} ${response.statusText}: ${text}`);
+            }
+            
+            console.error('Jira API error response:', errorData);
+            
+            const errorMessages = errorData.errorMessages || [];
+            const errors = errorData.errors || {};
+            
+            // Create detailed error message
+            let detailedError = `${response.status} ${response.statusText}:`;
+            
+            if (errorMessages.length > 0) {
+              detailedError += ' ' + errorMessages.join(', ');
+            }
+            
+            if (Object.keys(errors).length > 0) {
+              detailedError += ' ' + Object.entries(errors)
+                .map(([field, msg]) => `${field}: ${msg}`)
+                .join(', ');
+            }
+            
+            throw new Error(detailedError);
           });
         }
         return response.json();
@@ -497,8 +532,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Handle different option formats
         if (typeof option === 'object') {
+          // Store the ID as the value for Jira API compatibility
           optionEl.value = option.id || option.value || '';
           optionEl.textContent = option.name || option.text || option.value || option.id || JSON.stringify(option);
+          
+          // Store original object info as a data attribute for reference
+          if (option.id) {
+            optionEl.dataset.originalId = option.id;
+          }
         } else {
           optionEl.value = option;
           optionEl.textContent = option;
