@@ -274,6 +274,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Fetch Jira fields
   function fetchJiraFields(jiraUrl, email, apiToken) {
+    // First fetch the field metadata
     return fetch(`${jiraUrl}/rest/api/3/field`, {
       method: 'GET',
       headers: {
@@ -292,6 +293,49 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
       return response.json();
+    })
+    .then(fields => {
+      // For each custom field, fetch its allowed values if it's a select/option type
+      const customFieldPromises = fields.map(field => {
+        if (field.schema && (
+            field.schema.type === 'option' || 
+            field.schema.type === 'array' || 
+            field.schema.custom?.includes('select') ||
+            field.schema.custom?.includes('multiselect')
+          )) {
+          return fetch(`${jiraUrl}/rest/api/3/field/${field.id}/context/defaultValue`, {
+            method: 'GET',
+            headers: {
+              'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
+              'Accept': 'application/json'
+            }
+          })
+          .then(response => response.ok ? response.json() : null)
+          .then(defaultValue => {
+            return fetch(`${jiraUrl}/rest/api/3/field/${field.id}/context`, {
+              method: 'GET',
+              headers: {
+                'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
+                'Accept': 'application/json'
+              }
+            })
+            .then(response => response.ok ? response.json() : null)
+            .then(context => {
+              if (context && context.values) {
+                field.allowedValues = context.values;
+              }
+              if (defaultValue) {
+                field.defaultValue = defaultValue;
+              }
+              return field;
+            });
+          })
+          .catch(() => field); // Return original field if fetching additional data fails
+        }
+        return Promise.resolve(field);
+      });
+      
+      return Promise.all(customFieldPromises);
     });
   }
   
@@ -477,7 +521,7 @@ document.addEventListener('DOMContentLoaded', function() {
     saveCustomFields();
   }
   
-  // Create custom field row
+  // Create custom field row with appropriate input type
   function createCustomFieldRow(field) {
     const newRow = document.createElement('div');
     newRow.className = 'custom-field-row';
@@ -506,11 +550,60 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     fieldInputs.appendChild(fieldIdInput);
     
-    const fieldValueInput = document.createElement('input');
-    fieldValueInput.type = 'text';
-    fieldValueInput.className = 'custom-field-value';
-    fieldValueInput.value = field.value;
-    fieldValueInput.placeholder = 'Field Value';
+    // Create appropriate input based on field type
+    let fieldValueInput;
+    
+    if (field.schema && field.allowedValues) {
+      // Create select input for fields with allowed values
+      fieldValueInput = document.createElement('select');
+      fieldValueInput.className = 'custom-field-value';
+      
+      // Add empty option
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = '-- Select --';
+      fieldValueInput.appendChild(emptyOption);
+      
+      // Add allowed values
+      field.allowedValues.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value.id || value.value;
+        option.textContent = value.name || value.label || value.value;
+        if (field.defaultValue && field.defaultValue.id === value.id) {
+          option.selected = true;
+        }
+        fieldValueInput.appendChild(option);
+      });
+    } else if (field.schema && field.schema.type === 'date') {
+      // Create date input for date fields
+      fieldValueInput = document.createElement('input');
+      fieldValueInput.type = 'date';
+      fieldValueInput.className = 'custom-field-value';
+    } else if (field.schema && field.schema.type === 'datetime') {
+      // Create datetime-local input for datetime fields
+      fieldValueInput = document.createElement('input');
+      fieldValueInput.type = 'datetime-local';
+      fieldValueInput.className = 'custom-field-value';
+    } else if (field.schema && field.schema.type === 'number') {
+      // Create number input for number fields
+      fieldValueInput = document.createElement('input');
+      fieldValueInput.type = 'number';
+      fieldValueInput.className = 'custom-field-value';
+    } else {
+      // Default to text input
+      fieldValueInput = document.createElement('input');
+      fieldValueInput.type = 'text';
+      fieldValueInput.className = 'custom-field-value';
+    }
+    
+    // Set value if provided
+    if (field.value) {
+      fieldValueInput.value = field.value;
+    }
+    
+    // Set placeholder based on field type
+    fieldValueInput.placeholder = getValuePlaceholder(field);
+    
     fieldInputs.appendChild(fieldValueInput);
     
     const removeButton = document.createElement('button');
@@ -530,6 +623,25 @@ document.addEventListener('DOMContentLoaded', function() {
     fieldIdInput.addEventListener('blur', saveCustomFields);
     fieldValueInput.addEventListener('change', saveCustomFields);
     fieldValueInput.addEventListener('blur', saveCustomFields);
+  }
+  
+  // Helper function to get placeholder text based on field type
+  function getValuePlaceholder(field) {
+    if (!field.schema) return 'Field Value';
+    
+    switch (field.schema.type) {
+      case 'date':
+        return 'YYYY-MM-DD';
+      case 'datetime':
+        return 'YYYY-MM-DD HH:MM';
+      case 'number':
+        return '0';
+      case 'option':
+      case 'array':
+        return field.allowedValues ? 'Select a value' : 'Field Value';
+      default:
+        return 'Field Value';
+    }
   }
   
   // Save custom fields
