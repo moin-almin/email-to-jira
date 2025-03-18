@@ -4,32 +4,26 @@ document.addEventListener('DOMContentLoaded', function() {
   const apiTokenInput = document.getElementById('api-token');
   const emailInput = document.getElementById('email');
   const defaultProjectInput = document.getElementById('default-project');
-  const defaultIssueTypeSelect = document.getElementById('default-issue-type');
+  const defaultIssueTypeInput = document.getElementById('default-issue-type');
   const emailTemplateInput = document.getElementById('email-template');
   const customFieldsInput = document.getElementById('custom-fields');
-  const includeAttachmentsCheckbox = document.getElementById('include-attachments');
-  const testConnectionBtn = document.getElementById('test-connection');
+  const includeAttachmentsInput = document.getElementById('include-attachments');
   const saveBtn = document.getElementById('save-btn');
   const resetBtn = document.getElementById('reset-btn');
+  const testConnectionBtn = document.getElementById('test-connection');
   const connectionStatus = document.getElementById('connection-status');
-  
-  // Field Explorer elements
   const exploreFieldsBtn = document.getElementById('explore-fields');
   const fieldsSearchResults = document.getElementById('fields-search-results');
   const defaultCustomFieldsContainer = document.getElementById('default-custom-fields-container');
-  const addCustomFieldBtn = document.getElementById('add-custom-field');
-
+  
   // Load saved settings
   loadSettings();
 
   // Event listeners
-  testConnectionBtn.addEventListener('click', testConnection);
   saveBtn.addEventListener('click', saveSettings);
   resetBtn.addEventListener('click', resetSettings);
-  
-  // Field Explorer events
+  testConnectionBtn.addEventListener('click', testConnection);
   exploreFieldsBtn.addEventListener('click', exploreJiraFields);
-  addCustomFieldBtn.addEventListener('click', addCustomFieldRow);
   
   // Setup initial custom field listeners
   setupCustomFieldListeners();
@@ -54,13 +48,13 @@ document.addEventListener('DOMContentLoaded', function() {
       apiTokenInput.value = items.apiToken;
       emailInput.value = items.email;
       defaultProjectInput.value = items.defaultProject;
-      defaultIssueTypeSelect.value = items.defaultIssueType;
+      defaultIssueTypeInput.value = items.defaultIssueType;
       emailTemplateInput.value = items.emailTemplate;
       
       // Prefer customFieldsJson as it's formatted for the textarea
       customFieldsInput.value = items.customFieldsJson || items.customFields;
       
-      includeAttachmentsCheckbox.checked = items.includeAttachments;
+      includeAttachmentsInput.checked = items.includeAttachments;
       
       // Restore custom fields - use customFieldsArray if available
       restoreCustomFields(items.customFieldsArray);
@@ -89,10 +83,10 @@ document.addEventListener('DOMContentLoaded', function() {
       apiToken: apiTokenInput.value.trim(),
       email: emailInput.value.trim(),
       defaultProject: defaultProjectInput.value.trim(),
-      defaultIssueType: defaultIssueTypeSelect.value,
+      defaultIssueType: defaultIssueTypeInput.value,
       emailTemplate: emailTemplateInput.value,
       customFieldsJson: customFieldsInput.value,
-      includeAttachments: includeAttachmentsCheckbox.checked
+      includeAttachments: includeAttachmentsInput.checked
     }, function() {
       // Show save confirmation
       const saveConfirmation = document.createElement('div');
@@ -509,15 +503,58 @@ document.addEventListener('DOMContentLoaded', function() {
       const fieldValue = row.querySelector('.custom-field-value');
       
       if (fieldId && fieldValue && fieldId.value.trim()) {
-        customFields.push({
-          id: fieldId.value.trim(),
+        // Get the field name label if it exists
+        const fieldNameLabel = row.querySelector('.field-name-label');
+        const fieldName = fieldNameLabel ? fieldNameLabel.textContent : '';
+        
+        // Get original field ID if stored as a data attribute
+        const originalId = fieldId.dataset.originalId || fieldId.value.trim();
+        
+        // Create a comprehensive field object with metadata
+        const fieldData = {
+          id: originalId,
+          displayId: fieldId.value.trim(),
           value: fieldValue.value.trim(),
-          name: row.querySelector('.field-name-label')?.textContent || '',
-          readonly: fieldId.readOnly
-        });
+          name: fieldName,
+          readonly: fieldId.readOnly,
+          
+          // Store field type and metadata
+          type: row.dataset.fieldType || fieldValue.dataset.fieldType || (fieldValue.tagName === 'SELECT' ? 'select' : fieldValue.type),
+          schema: row.dataset.schema ? JSON.parse(row.dataset.schema) : null,
+          custom: row.dataset.fieldCustom !== undefined ? row.dataset.fieldCustom === 'true' : null,
+          allowedValues: row.dataset.allowedValues ? JSON.parse(row.dataset.allowedValues) : []
+        };
+        
+        // If it's a select, store the options
+        if (fieldValue.tagName === 'SELECT') {
+          fieldData.options = [];
+          Array.from(fieldValue.options).forEach(option => {
+            if (option.value) { // Skip empty placeholder options
+              fieldData.options.push({
+                value: option.value,
+                text: option.textContent,
+                selected: option.selected
+              });
+            }
+          });
+          
+          // Ensure we flag this as a select type
+          fieldData.type = 'select';
+          
+          // Create allowedValues array if it doesn't exist
+          if (!fieldData.allowedValues || !fieldData.allowedValues.length) {
+            fieldData.allowedValues = fieldData.options.map(option => ({
+              id: option.value,
+              name: option.text
+            }));
+          }
+        }
+        
+        customFields.push(fieldData);
       }
     });
     
+    // Create a simplified JSON object for the text area
     const customFieldsJson = {};
     customFields.forEach(field => {
       customFieldsJson[field.id] = field.value;
@@ -526,12 +563,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const jsonString = JSON.stringify(customFieldsJson, null, 2);
     customFieldsInput.value = jsonString;
     
-    // Save to storage
+    // Save complete field data to storage
     chrome.storage.sync.set({ 
       customFieldsArray: customFields,
       customFields: customFields,
       customFieldsJson: jsonString
     });
+    
+    console.log('Updated custom fields with metadata:', customFields);
   }
 
   // Helper function to add a field to custom fields
@@ -542,12 +581,24 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Check if field already exists
       if (!customFields.find(f => f.id === field.id)) {
+        // Detect field type from name for date fields
+        let detectedType = null;
+        
+        // If name contains "date", treat as date type
+        if (field.name && field.name.toLowerCase().includes('date')) {
+          detectedType = 'date';
+          console.log(`Auto-detected date field from name: ${field.name}`);
+        }
+        
         // Create a field object with essential data
         const fieldData = {
           id: field.id,
           name: field.name || '',
           value: field.value || customFieldsJsonObj[field.id] || '',
           readonly: true,
+          
+          // Store field type appropriately
+          type: detectedType || field.type || (field.schema ? field.schema.type : null),
           
           // Store field schema information if available
           schema: field.schema || null,
@@ -578,48 +629,35 @@ document.addEventListener('DOMContentLoaded', function() {
   function removeFieldFromCustomFields(fieldId) {
     chrome.storage.sync.get(['customFieldsArray', 'customFieldsJson'], function(data) {
       const customFields = data.customFieldsArray || [];
-      const customFieldsJsonObj = data.customFieldsJson ? JSON.parse(data.customFieldsJson) : {};
+      const updatedFields = customFields.filter(field => field.id !== fieldId);
       
-      const updatedFields = customFields.filter(f => f.id !== fieldId);
-      
-      // Remove the field row from the container
-      const rows = defaultCustomFieldsContainer.querySelectorAll('.custom-field-row');
-      rows.forEach(row => {
-        const idInput = row.querySelector('.custom-field-id');
-        if (idInput && idInput.value === fieldId) {
-          row.remove();
-        }
-      });
-      
-      // Update storage
       chrome.storage.sync.set({ 
         customFieldsArray: updatedFields,
-        customFields: updatedFields,
-        customFieldsJson: JSON.stringify(customFieldsJsonObj, null, 2)
+        customFields: updatedFields
       }, function() {
-        // Update the JSON textarea
         updateCustomFieldsJson();
       });
     });
-  }
-  
-  // Add new custom field row
-  function addCustomFieldRow() {
-    const fieldData = {
-      id: '',
-      value: '',
-      name: '',
-      readonly: false
-    };
-    
-    createCustomFieldRow(fieldData);
-    saveCustomFields();
   }
   
   // Create custom field row with appropriate input type
   function createCustomFieldRow(field) {
     const newRow = document.createElement('div');
     newRow.className = 'custom-field-row';
+    
+    // Store field metadata as dataset attributes
+    if (field.schema) {
+      newRow.dataset.schema = JSON.stringify(field.schema);
+    }
+    if (field.type) {
+      newRow.dataset.fieldType = field.type;
+    }
+    if (field.custom !== undefined) {
+      newRow.dataset.fieldCustom = field.custom;
+    }
+    if (field.allowedValues) {
+      newRow.dataset.allowedValues = JSON.stringify(field.allowedValues);
+    }
     
     // Add field name label if available
     if (field.name) {
@@ -953,21 +991,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get original field ID if stored as a data attribute
         const originalId = fieldId.dataset.originalId || fieldId.value.trim();
         
-        // Get field metadata from the field element
+        // Create a comprehensive field data object
         const fieldData = {
           id: originalId,
-          displayId: fieldId.value.trim(), // The display ID might be different (like using name instead of ID)
+          displayId: fieldId.value.trim(), // The displayed ID might be different (like using name instead of ID)
           value: fieldValue.value.trim(),
           name: fieldName,
           readonly: fieldId.readOnly,
           
-          // Store input type information
-          inputType: fieldValue.type || (fieldValue.tagName === 'SELECT' ? 'select' : 'text'),
+          // Store field type information
+          type: row.dataset.fieldType || fieldValue.dataset.fieldType || (fieldValue.tagName === 'SELECT' ? 'select' : fieldValue.type),
           
-          // Preserve schema and other metadata if available
+          // If there's schema data stored on the row, include it
           schema: row.dataset.schema ? JSON.parse(row.dataset.schema) : null,
-          type: row.dataset.fieldType || fieldValue.dataset.fieldType || null,
-          custom: row.dataset.fieldCustom || null,
+          
+          // Include custom field flag if available
+          custom: row.dataset.fieldCustom !== undefined ? row.dataset.fieldCustom === 'true' : null,
+          
+          // Include allowed values if available
           allowedValues: row.dataset.allowedValues ? JSON.parse(row.dataset.allowedValues) : []
         };
         
@@ -983,29 +1024,44 @@ document.addEventListener('DOMContentLoaded', function() {
               });
             }
           });
+          
+          // Ensure we flag this as a dropdown/select type
+          fieldData.type = 'select';
+          
+          // Create allowedValues array if it doesn't exist
+          if (!fieldData.allowedValues || !fieldData.allowedValues.length) {
+            fieldData.allowedValues = fieldData.options.map(option => ({
+              id: option.value,
+              name: option.text
+            }));
+          }
         }
         
         customFields.push(fieldData);
       }
     });
     
-    // Save to both storage keys for compatibility with popup
+    // Log the fields we're saving
+    console.log('Saving custom fields with complete metadata:', customFields);
+    
+    // Save to both storage keys for compatibility
     chrome.storage.sync.set({ 
       customFieldsArray: customFields,
       customFields: customFields
     }, function() {
-      console.log('Custom fields saved:', customFields);
-      
       // Also update the JSON textarea
       const customFieldsJson = {};
       customFields.forEach(field => {
         try {
-          // Try to parse as JSON first for complex values
+          // Use the original field ID as the key in the JSON
+          const key = field.id;
+          
+          // Try to parse the value as JSON first
           try {
-            customFieldsJson[field.id] = JSON.parse(field.value);
+            customFieldsJson[key] = JSON.parse(field.value);
           } catch (e) {
             // If not valid JSON, use as string
-            customFieldsJson[field.id] = field.value;
+            customFieldsJson[key] = field.value;
           }
         } catch (e) {
           console.error('Error adding custom field to JSON:', e);

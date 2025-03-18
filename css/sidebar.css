@@ -117,63 +117,56 @@ button:hover {
   margin-top: 5px;
 }
 
+/* Custom field rows */
 .custom-field-row {
-  margin-bottom: 8px;
-}
-
-.field-name-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: #172b4d;
-  margin-bottom: 2px;
-}
-
-.field-inputs {
+  margin-bottom: 12px;
+  padding-bottom: 0;
+  border-bottom: none;
   display: flex;
-  gap: 5px;
-  align-items: center;
+  flex-direction: column;
+  width: 100%;
 }
 
-.custom-field-id {
-  flex: 1;
-  font-size: 12px;
+.custom-field-name {
+  font-size: 13px;
   font-weight: 500;
-  color: #172b4d;
-  border: none !important;
-  background: transparent !important;
-  cursor: default;
-  pointer-events: none;
-  padding: 0 !important;
-  margin: 0 0 4px 0 !important;
-  width: 100% !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #4a5568;
+  margin-bottom: 4px;
+  display: block;
 }
 
 .custom-field-value {
   width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
+  padding: 8px 12px;
+  border: 1px solid #DFE1E6;
   border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.3s;
-}
-
-.custom-field-value:focus {
-  border-color: #0052cc;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.2);
+  font-size: 13px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background-color: #fff;
+  box-sizing: border-box;
+  height: 36px;
 }
 
 /* Style for select inputs */
 select.custom-field-value {
+  width: 100%;
   height: 36px;
   appearance: none;
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="6"><path d="M0 0l6 6 6-6z" fill="%23666"/></svg>');
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 10px;
+  padding-right: 30px;
+}
+
+/* Style for date inputs */
+input[type="date"].custom-field-value {
+  width: 100%;
+  appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>');
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
   padding-right: 30px;
 }
 
@@ -188,11 +181,22 @@ input[type="checkbox"].custom-field-value.checkbox {
 textarea.custom-field-value {
   resize: vertical;
   min-height: 60px;
+  line-height: 1.4;
+}
+
+/* Field info (type description) */
+.field-info {
+  font-size: 11px;
+  color: #6B778C;
+  margin-top: 6px;
+  margin-bottom: 5px;
+  font-style: italic;
+  padding-left: 4px;
 }
 
 /* Message when no fields are configured */
 .no-fields-message {
-  color: #666;
+  color: #6B778C;
   font-style: italic;
   text-align: center;
   padding: 20px;
@@ -311,4 +315,37 @@ textarea.custom-field-value {
   margin-bottom: 5px;
   font-style: italic;
   padding-left: 4px;
+}
+
+/* Style for remove button */
+.remove-field {
+  background-color: #FFF0F1;
+  color: #DE350B;
+  border: 1px solid #FFBDAD;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  flex: 0 0 32px;
+  padding: 0;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Message when no fields configured */
+.info-message {
+  color: #6B778C;
+  font-style: italic;
+  text-align: center;
+  padding: 15px;
+  background: #f8f8f8;
+  border-radius: 4px;
+  border: 1px dashed #ddd;
+  margin: 10px 0;
+  width: 100%;
+  box-sizing: border-box;
 } 
