@@ -136,19 +136,70 @@ button:hover {
 
 .custom-field-id {
   flex: 1;
-  background: none;
-  border: none;
-  padding: 6px 0;
-  color: #4a5568;
+  font-size: 12px;
   font-weight: 500;
+  color: #172b4d;
+  border: none !important;
+  background: transparent !important;
   cursor: default;
-  user-select: none;
-  font-family: 'Inter', sans-serif;
-  letter-spacing: -0.01em;
+  pointer-events: none;
+  padding: 0 !important;
+  margin: 0 0 4px 0 !important;
+  width: 100% !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .custom-field-value {
-  flex: 1.5;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.3s;
+}
+
+.custom-field-value:focus {
+  border-color: #0052cc;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.2);
+}
+
+/* Style for select inputs */
+select.custom-field-value {
+  height: 36px;
+  appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="6"><path d="M0 0l6 6 6-6z" fill="%23666"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px;
+  padding-right: 30px;
+}
+
+/* Style for checkboxes */
+input[type="checkbox"].custom-field-value.checkbox {
+  width: auto;
+  height: 18px;
+  width: 18px;
+}
+
+/* Style for textarea */
+textarea.custom-field-value {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* Message when no fields are configured */
+.no-fields-message {
+  color: #666;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+  background: #f8f8f8;
+  border-radius: 4px;
+  border: 1px dashed #ddd;
+  margin: 10px 0;
 }
 
 /* Button styles for Extract Email and Create Ticket */
@@ -250,4 +301,14 @@ button:hover {
 @keyframes dance {
   0%, 100% { transform: rotate(-20deg); }
   50% { transform: rotate(20deg); }
+}
+
+/* Add field info styling */
+.field-info {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+  margin-bottom: 5px;
+  font-style: italic;
+  padding-left: 4px;
 } 

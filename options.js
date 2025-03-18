@@ -274,6 +274,9 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Fetch Jira fields
   function fetchJiraFields(jiraUrl, email, apiToken) {
+    // Show loading state
+    showConnectionStatus('Fetching Jira field metadata...', '');
+    
     // First fetch the field metadata
     return fetch(`${jiraUrl}/rest/api/3/field`, {
       method: 'GET',
@@ -295,24 +298,82 @@ document.addEventListener('DOMContentLoaded', function() {
       return response.json();
     })
     .then(fields => {
-      // For each custom field, fetch its allowed values if it's a select/option type
-      const customFieldPromises = fields.map(field => {
-        if (field.schema && (
-            field.schema.type === 'option' || 
-            field.schema.type === 'array' || 
-            field.schema.custom?.includes('select') ||
-            field.schema.custom?.includes('multiselect')
-          )) {
-          return fetch(`${jiraUrl}/rest/api/3/field/${field.id}/context/defaultValue`, {
-            method: 'GET',
-            headers: {
-              'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
-              'Accept': 'application/json'
+      // Log the initial fields for debugging
+      console.log('Retrieved initial field metadata:', fields);
+      
+      // For each project get available issue types and field metadata
+      return fetch(`${jiraUrl}/rest/api/3/issue/createmeta?expand=projects.issuetypes.fields`, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
+          'Accept': 'application/json'
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status} when fetching issue metadata`);
+        }
+        return response.json();
+      })
+      .then(metaData => {
+        showConnectionStatus('Processing field metadata...', '');
+        console.log('Retrieved issue metadata:', metaData);
+        
+        // Enhanced fields with allowedValues from metadata
+        const enhancedFields = fields.map(field => {
+          const enhancedField = { ...field };
+          
+          // Try to find this field in the metadata to get allowed values and other details
+          if (metaData.projects && metaData.projects.length > 0) {
+            for (const project of metaData.projects) {
+              if (project.issuetypes && project.issuetypes.length > 0) {
+                for (const issueType of project.issuetypes) {
+                  if (issueType.fields && issueType.fields[field.id]) {
+                    const fieldMeta = issueType.fields[field.id];
+                    
+                    // Get allowed values if available
+                    if (fieldMeta.allowedValues && fieldMeta.allowedValues.length > 0) {
+                      enhancedField.allowedValues = fieldMeta.allowedValues;
+                    }
+                    
+                    // Get default value if available
+                    if (fieldMeta.defaultValue) {
+                      enhancedField.defaultValue = fieldMeta.defaultValue;
+                    }
+                    
+                    // Get other useful metadata
+                    if (fieldMeta.required !== undefined) {
+                      enhancedField.required = fieldMeta.required;
+                    }
+                    
+                    // Found what we need for this field, break from inner loops
+                    break;
+                  }
+                }
+                // Break if we found allowed values
+                if (enhancedField.allowedValues) break;
+              }
             }
-          })
-          .then(response => response.ok ? response.json() : null)
-          .then(defaultValue => {
-            return fetch(`${jiraUrl}/rest/api/3/field/${field.id}/context`, {
+          }
+          return enhancedField;
+        });
+        
+        // Now make separate calls for fields that need additional info
+        const fieldPromises = enhancedFields.map(field => {
+          // If it's a select/option type field and we don't have allowedValues yet, try a direct approach
+          if (field.schema && (
+              field.schema.type === 'option' || 
+              field.schema.type === 'array' ||
+              (field.schema.custom && (
+                field.schema.custom.includes('select') ||
+                field.schema.custom.includes('option') ||
+                field.schema.custom.includes('radio') ||
+                field.schema.custom.includes('checkbox')
+              ))
+            ) && !field.allowedValues) {
+              
+            // Try to get field configuration (includes allowed values)
+            return fetch(`${jiraUrl}/rest/api/3/field/${encodeURIComponent(field.id)}/context`, {
               method: 'GET',
               headers: {
                 'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
@@ -320,22 +381,38 @@ document.addEventListener('DOMContentLoaded', function() {
               }
             })
             .then(response => response.ok ? response.json() : null)
-            .then(context => {
-              if (context && context.values) {
-                field.allowedValues = context.values;
+            .then(contextData => {
+              if (contextData && contextData.values && contextData.values.length > 0) {
+                field.allowedValues = contextData.values;
               }
-              if (defaultValue) {
-                field.defaultValue = defaultValue;
+              
+              // If still no allowed values, try a different endpoint for cascading select
+              if (!field.allowedValues && field.schema.custom && field.schema.custom.includes('cascading')) {
+                return fetch(`${jiraUrl}/rest/api/3/field/${encodeURIComponent(field.id)}/option`, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': 'Basic ' + btoa(`${email}:${apiToken}`),
+                    'Accept': 'application/json'
+                  }
+                })
+                .then(response => response.ok ? response.json() : null)
+                .then(optionsData => {
+                  if (optionsData && optionsData.values) {
+                    field.allowedValues = optionsData.values;
+                  }
+                  return field;
+                })
+                .catch(() => field);
               }
               return field;
-            });
-          })
-          .catch(() => field); // Return original field if fetching additional data fails
-        }
-        return Promise.resolve(field);
+            })
+            .catch(() => field);
+          }
+          return Promise.resolve(field);
+        });
+        
+        return Promise.all(fieldPromises);
       });
-      
-      return Promise.all(customFieldPromises);
     });
   }
   
@@ -390,10 +467,19 @@ document.addEventListener('DOMContentLoaded', function() {
     checkbox.id = `field-${field.id}`;
     checkbox.checked = currentFieldIds.includes(field.id);
     
+    // Build field type description
+    let typeDescription = field.schema?.type || 'unknown';
+    if (field.schema?.custom) {
+      typeDescription += ' • Format: ' + field.schema.custom;
+    }
+    if (field.allowedValues && field.allowedValues.length > 0) {
+      typeDescription += ` • Options: ${field.allowedValues.length}`;
+    }
+    
     const label = document.createElement('label');
     label.htmlFor = `field-${field.id}`;
     label.innerHTML = `<strong>${field.name}</strong> (${field.id})<br>
-                     <span class="field-type">Type: ${field.schema?.type || 'unknown'} ${field.schema?.custom ? '• Format: ' + field.schema.custom : ''}</span>`;
+                     <span class="field-type">Type: ${typeDescription}</span>`;
     
     fieldDiv.appendChild(checkbox);
     fieldDiv.appendChild(label);
@@ -402,13 +488,7 @@ document.addEventListener('DOMContentLoaded', function() {
     checkbox.addEventListener('change', function() {
       if (this.checked) {
         // Add field to custom fields
-        addFieldToCustomFields({
-          id: field.id,
-          name: field.name,
-          type: field.schema?.type || 'unknown',
-          custom: field.schema?.custom || 'standard',
-          value: customFieldsJsonObj[field.id] || ''
-        });
+        addFieldToCustomFields(field);
       } else {
         // Remove field from custom fields
         removeFieldFromCustomFields(field.id);
@@ -460,11 +540,26 @@ document.addEventListener('DOMContentLoaded', function() {
       const customFields = data.customFieldsArray || [];
       const customFieldsJsonObj = data.customFieldsJson ? JSON.parse(data.customFieldsJson) : {};
       
+      // Check if field already exists
       if (!customFields.find(f => f.id === field.id)) {
-        customFields.push(field);
+        // Create a field object with essential data
+        const fieldData = {
+          id: field.id,
+          name: field.name || '',
+          value: field.value || customFieldsJsonObj[field.id] || '',
+          readonly: true,
+          
+          // Store field schema information if available
+          schema: field.schema || null,
+          
+          // Store allowedValues if available (for dropdowns)
+          allowedValues: field.allowedValues || []
+        };
+        
+        customFields.push(fieldData);
         
         // Create the field row in the container
-        createCustomFieldRow(field);
+        createCustomFieldRow(fieldData);
         
         // Update storage
         chrome.storage.sync.set({ 
@@ -531,6 +626,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const fieldLabel = document.createElement('div');
       fieldLabel.className = 'field-name-label';
       fieldLabel.textContent = field.name;
+      // Store field ID as a data attribute for future reference
+      fieldLabel.dataset.fieldId = field.id;
       newRow.appendChild(fieldLabel);
     }
     
@@ -541,10 +638,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const fieldIdInput = document.createElement('input');
     fieldIdInput.type = 'text';
     fieldIdInput.className = 'custom-field-id';
-    fieldIdInput.value = field.id;
+    fieldIdInput.value = field.name || field.id;
+    fieldIdInput.dataset.originalId = field.id; // Store the original field ID
+    
     if (field.readonly) {
       fieldIdInput.readOnly = true;
-      fieldIdInput.title = field.name;
+      fieldIdInput.title = field.id;
     } else {
       fieldIdInput.placeholder = 'Field ID (e.g., customfield_10001)';
     }
@@ -553,10 +652,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Create appropriate input based on field type
     let fieldValueInput;
     
-    if (field.schema && field.allowedValues) {
+    // Store field type for debugging
+    const fieldType = field.type || (field.schema ? (field.schema.custom || field.schema.type) : 'text');
+    console.log(`Creating input for field ${field.id} (${field.name}) with type: ${fieldType}`);
+    
+    // First check if we have allowedValues for dropdown
+    if (field.allowedValues && field.allowedValues.length > 0) {
       // Create select input for fields with allowed values
+      console.log(`Field ${field.id} has ${field.allowedValues.length} allowed values`);
       fieldValueInput = document.createElement('select');
       fieldValueInput.className = 'custom-field-value';
+      fieldValueInput.dataset.fieldType = 'select';
       
       // Add empty option
       const emptyOption = document.createElement('option');
@@ -567,48 +673,178 @@ document.addEventListener('DOMContentLoaded', function() {
       // Add allowed values
       field.allowedValues.forEach(value => {
         const option = document.createElement('option');
-        option.value = value.id || value.value;
-        option.textContent = value.name || value.label || value.value;
-        if (field.defaultValue && field.defaultValue.id === value.id) {
-          option.selected = true;
+        option.value = value.id || value.value || value.key || JSON.stringify(value);
+        option.textContent = value.name || value.label || value.value || value.displayName || JSON.stringify(value);
+        
+        // Check if this option matches the default value
+        if (field.defaultValue) {
+          const defaultId = field.defaultValue.id || field.defaultValue.value || field.defaultValue.key;
+          const valueId = value.id || value.value || value.key;
+          if (defaultId === valueId) {
+            option.selected = true;
+          }
         }
+        
+        // Check if this option matches the current value
+        if (field.value) {
+          if (field.value === option.value || field.value === option.textContent) {
+            option.selected = true;
+          }
+        }
+        
         fieldValueInput.appendChild(option);
       });
-    } else if (field.schema && field.schema.type === 'date') {
-      // Create date input for date fields
-      fieldValueInput = document.createElement('input');
-      fieldValueInput.type = 'date';
-      fieldValueInput.className = 'custom-field-value';
-    } else if (field.schema && field.schema.type === 'datetime') {
-      // Create datetime-local input for datetime fields
-      fieldValueInput = document.createElement('input');
-      fieldValueInput.type = 'datetime-local';
-      fieldValueInput.className = 'custom-field-value';
-    } else if (field.schema && field.schema.type === 'number') {
-      // Create number input for number fields
-      fieldValueInput = document.createElement('input');
-      fieldValueInput.type = 'number';
-      fieldValueInput.className = 'custom-field-value';
+    } else if (field.schema || field.type) {
+      // Use schema or type info to determine input type
+      const type = field.type || (field.schema ? field.schema.type : null);
+      const custom = field.custom || (field.schema ? field.schema.custom : null);
+      
+      // Handle custom field types first if available
+      if (custom) {
+        if (custom.includes('multiselect') || custom.includes('labels') || 
+            custom.includes('multi-checkbox') || custom.includes('checkboxes')) {
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'text';
+          fieldValueInput.className = 'custom-field-value';
+          fieldValueInput.dataset.fieldType = 'array';
+          fieldValueInput.placeholder = 'Values (comma separated)';
+        } else if (custom.includes('userpicker') || custom.includes('userlist')) {
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'text';
+          fieldValueInput.className = 'custom-field-value';
+          fieldValueInput.dataset.fieldType = 'user';
+          fieldValueInput.placeholder = 'Username or account ID';
+        } else if (custom.includes('textarea')) {
+          fieldValueInput = document.createElement('textarea');
+          fieldValueInput.className = 'custom-field-value';
+          fieldValueInput.dataset.fieldType = 'textarea';
+          fieldValueInput.placeholder = 'Enter text...';
+          fieldValueInput.rows = 3;
+        } else if (custom.includes('url')) {
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'url';
+          fieldValueInput.className = 'custom-field-value';
+          fieldValueInput.dataset.fieldType = 'url';
+          fieldValueInput.placeholder = 'https://...';
+        } else if (custom.includes('date')) {
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'date';
+          fieldValueInput.className = 'custom-field-value';
+          fieldValueInput.dataset.fieldType = 'date';
+        } else {
+          // Default for other custom types
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'text';
+          fieldValueInput.className = 'custom-field-value';
+          fieldValueInput.dataset.fieldType = custom;
+        }
+      } else if (type) {
+        // Handle standard types
+        switch (type) {
+          case 'date':
+            fieldValueInput = document.createElement('input');
+            fieldValueInput.type = 'date';
+            fieldValueInput.className = 'custom-field-value';
+            fieldValueInput.dataset.fieldType = 'date';
+            break;
+            
+          case 'datetime':
+            fieldValueInput = document.createElement('input');
+            fieldValueInput.type = 'datetime-local';
+            fieldValueInput.className = 'custom-field-value';
+            fieldValueInput.dataset.fieldType = 'datetime';
+            break;
+            
+          case 'number':
+            fieldValueInput = document.createElement('input');
+            fieldValueInput.type = 'number';
+            fieldValueInput.className = 'custom-field-value';
+            fieldValueInput.dataset.fieldType = 'number';
+            break;
+            
+          case 'boolean':
+            fieldValueInput = document.createElement('select');
+            fieldValueInput.className = 'custom-field-value';
+            fieldValueInput.dataset.fieldType = 'boolean';
+            
+            const emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = '-- Select --';
+            
+            const trueOption = document.createElement('option');
+            trueOption.value = 'true';
+            trueOption.textContent = 'Yes';
+            
+            const falseOption = document.createElement('option');
+            falseOption.value = 'false';
+            falseOption.textContent = 'No';
+            
+            fieldValueInput.appendChild(emptyOption);
+            fieldValueInput.appendChild(trueOption);
+            fieldValueInput.appendChild(falseOption);
+            
+            if (field.value === 'true') {
+              trueOption.selected = true;
+            } else if (field.value === 'false') {
+              falseOption.selected = true;
+            }
+            break;
+            
+          case 'user':
+            fieldValueInput = document.createElement('input');
+            fieldValueInput.type = 'text';
+            fieldValueInput.className = 'custom-field-value';
+            fieldValueInput.dataset.fieldType = 'user';
+            fieldValueInput.placeholder = 'Username or account ID';
+            break;
+            
+          case 'array':
+            fieldValueInput = document.createElement('input');
+            fieldValueInput.type = 'text';
+            fieldValueInput.className = 'custom-field-value';
+            fieldValueInput.dataset.fieldType = 'array';
+            fieldValueInput.placeholder = 'Values (comma separated)';
+            break;
+            
+          default:
+            // Default to text input
+            fieldValueInput = document.createElement('input');
+            fieldValueInput.type = 'text';
+            fieldValueInput.className = 'custom-field-value';
+            fieldValueInput.dataset.fieldType = type;
+        }
+      } else {
+        // Default to text input if no schema or type info
+        fieldValueInput = document.createElement('input');
+        fieldValueInput.type = 'text';
+        fieldValueInput.className = 'custom-field-value';
+      }
     } else {
-      // Default to text input
+      // Default to text input if no schema or type info
       fieldValueInput = document.createElement('input');
       fieldValueInput.type = 'text';
       fieldValueInput.className = 'custom-field-value';
     }
     
-    // Set value if provided
+    // Set value if provided and appropriate
     if (field.value) {
-      fieldValueInput.value = field.value;
+      if (fieldValueInput.tagName === 'TEXTAREA' || 
+          fieldValueInput.tagName === 'INPUT' && fieldValueInput.type !== 'select') {
+        fieldValueInput.value = field.value;
+      }
     }
     
-    // Set placeholder based on field type
-    fieldValueInput.placeholder = getValuePlaceholder(field);
+    // Set placeholder based on field type if not already set
+    if (!fieldValueInput.placeholder && fieldValueInput.tagName !== 'SELECT') {
+      fieldValueInput.placeholder = getValuePlaceholder(field);
+    }
     
     fieldInputs.appendChild(fieldValueInput);
     
     const removeButton = document.createElement('button');
     removeButton.className = 'remove-field';
     removeButton.textContent = '✕';
+    removeButton.title = 'Remove field';
     removeButton.addEventListener('click', function() {
       newRow.remove();
       saveCustomFields();
@@ -623,22 +859,79 @@ document.addEventListener('DOMContentLoaded', function() {
     fieldIdInput.addEventListener('blur', saveCustomFields);
     fieldValueInput.addEventListener('change', saveCustomFields);
     fieldValueInput.addEventListener('blur', saveCustomFields);
+    
+    return newRow;
   }
   
   // Helper function to get placeholder text based on field type
   function getValuePlaceholder(field) {
     if (!field.schema) return 'Field Value';
     
+    // Check for custom field types first
+    if (field.schema.custom) {
+      if (field.schema.custom.includes('sprint')) {
+        return 'Sprint ID or name';
+      }
+      if (field.schema.custom.includes('epic')) {
+        return 'Epic ID or name';
+      }
+      if (field.schema.custom.includes('version')) {
+        return 'Version ID or name';
+      }
+      if (field.schema.custom.includes('multiversion')) {
+        return 'Version IDs (comma separated)';
+      }
+      if (field.schema.custom.includes('multiselect')) {
+        return 'Values (comma separated)';
+      }
+      if (field.schema.custom.includes('labels') || field.schema.custom.includes('multi-checkbox')) {
+        return 'Values (comma separated)';
+      }
+      if (field.schema.custom.includes('userpicker')) {
+        return 'Username or account ID';
+      }
+      if (field.schema.custom.includes('multicheckboxes')) {
+        return 'Values (comma separated)';
+      }
+      if (field.schema.custom.includes('textarea')) {
+        return 'Text (supports multiple lines)';
+      }
+      if (field.schema.custom.includes('url')) {
+        return 'https://example.com';
+      }
+    }
+    
+    // Then fall back to generic field types
     switch (field.schema.type) {
       case 'date':
         return 'YYYY-MM-DD';
       case 'datetime':
         return 'YYYY-MM-DD HH:MM';
+      case 'time':
+        return 'HH:MM';
       case 'number':
+        return '0.00';
+      case 'integer':
         return '0';
       case 'option':
       case 'array':
         return field.allowedValues ? 'Select a value' : 'Field Value';
+      case 'user':
+        return 'Username or account ID';
+      case 'group':
+        return 'Group name';
+      case 'string':
+        return field.name ? field.name + ' value' : 'Text';
+      case 'project':
+        return 'Project key';
+      case 'priority':
+        return 'Priority name';
+      case 'issuetype':
+        return 'Issue type name';
+      case 'resolution':
+        return 'Resolution name';
+      case 'status':
+        return 'Status name';
       default:
         return 'Field Value';
     }
@@ -657,12 +950,42 @@ document.addEventListener('DOMContentLoaded', function() {
         const fieldNameLabel = row.querySelector('.field-name-label');
         const fieldName = fieldNameLabel ? fieldNameLabel.textContent : '';
         
-        customFields.push({
-          id: fieldId.value.trim(),
+        // Get original field ID if stored as a data attribute
+        const originalId = fieldId.dataset.originalId || fieldId.value.trim();
+        
+        // Get field metadata from the field element
+        const fieldData = {
+          id: originalId,
+          displayId: fieldId.value.trim(), // The display ID might be different (like using name instead of ID)
           value: fieldValue.value.trim(),
           name: fieldName,
-          readonly: fieldId.readOnly
-        });
+          readonly: fieldId.readOnly,
+          
+          // Store input type information
+          inputType: fieldValue.type || (fieldValue.tagName === 'SELECT' ? 'select' : 'text'),
+          
+          // Preserve schema and other metadata if available
+          schema: row.dataset.schema ? JSON.parse(row.dataset.schema) : null,
+          type: row.dataset.fieldType || fieldValue.dataset.fieldType || null,
+          custom: row.dataset.fieldCustom || null,
+          allowedValues: row.dataset.allowedValues ? JSON.parse(row.dataset.allowedValues) : []
+        };
+        
+        // If it's a select, store the options
+        if (fieldValue.tagName === 'SELECT') {
+          fieldData.options = [];
+          Array.from(fieldValue.options).forEach(option => {
+            if (option.value) { // Skip empty placeholder options
+              fieldData.options.push({
+                value: option.value,
+                text: option.textContent,
+                selected: option.selected
+              });
+            }
+          });
+        }
+        
+        customFields.push(fieldData);
       }
     });
     

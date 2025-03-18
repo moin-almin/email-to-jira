@@ -149,6 +149,74 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.runtime.openOptionsPage();
   });
 
+  // Format field value based on input type
+  function formatFieldValue(value, element) {
+    if (!value || !element) return value;
+    
+    try {
+      // Format based on input type
+      if (element.tagName === 'SELECT') {
+        // For select elements with complex values (JSON)
+        if (value.startsWith('{') && value.endsWith('}')) {
+          return JSON.parse(value);
+        } else if (value === 'true') {
+          return true;
+        } else if (value === 'false') {
+          return false;
+        }
+        // Otherwise keep as-is (string)
+        return value;
+      }
+      
+      // Format based on input type attribute
+      switch (element.type) {
+        case 'date':
+          // YYYY-MM-DD format is used directly
+          return value;
+          
+        case 'datetime-local':
+          // Convert to ISO format
+          const date = new Date(value);
+          return !isNaN(date.getTime()) ? date.toISOString() : value;
+          
+        case 'number':
+          return parseFloat(value);
+          
+        default:
+          // For text inputs, do additional parsing
+          
+          // Check for comma-separated values (arrays)
+          if (value.includes(',')) {
+            const items = value.split(',').map(v => v.trim());
+            
+            // Convert to number array if all are numbers
+            if (items.every(v => !isNaN(parseFloat(v)) && !isNaN(v))) {
+              return items.map(v => parseFloat(v));
+            }
+            // Otherwise return string array
+            return items;
+          }
+          
+          // Check for numbers
+          if (!isNaN(parseFloat(value)) && !isNaN(value)) {
+            return parseFloat(value);
+          }
+          
+          // Check for JSON objects/arrays
+          if ((value.startsWith('{') && value.endsWith('}')) || 
+              (value.startsWith('[') && value.endsWith(']'))) {
+            return JSON.parse(value);
+          }
+          
+          // Default to string
+          return value;
+      }
+    } catch (error) {
+      console.warn('Error formatting field value:', error);
+      return value; // Return original value if parsing fails
+    }
+  }
+
   function createJiraTicket() {
     // Get Jira credentials
     chrome.storage.sync.get(['jiraUrl', 'apiToken', 'email'], function(data) {
@@ -193,28 +261,38 @@ document.addEventListener('DOMContentLoaded', function() {
       // Add custom fields to payload
       const customFieldRows = document.querySelectorAll('.custom-field-row');
       customFieldRows.forEach(row => {
-        const fieldId = row.querySelector('.custom-field-id').value.trim();
-        const fieldValue = row.querySelector('.custom-field-value').value.trim();
+        const fieldIdInput = row.querySelector('.custom-field-id');
+        // Use the title attribute which should contain the actual field ID
+        const fieldId = fieldIdInput.title || fieldIdInput.value.trim();
         
-        if (fieldId && fieldValue) {
-          // Try to convert value to appropriate type
-          let parsedValue = fieldValue;
+        // Only process if we have a valid field ID
+        if (fieldId) {
+          const fieldValueEl = row.querySelector('.custom-field-value');
+          let fieldValue = fieldValueEl.value.trim();
           
-          try {
-            // If value is a number, convert to number
-            if (!isNaN(fieldValue) && !isNaN(parseFloat(fieldValue))) {
-              parsedValue = parseFloat(fieldValue);
+          // Skip empty fields
+          if (fieldValue) {
+            // Handle different input types
+            if (fieldValueEl.tagName === 'SELECT') {
+              // For boolean fields
+              if (fieldValue === 'true') {
+                fieldValue = true;
+              } else if (fieldValue === 'false') {
+                fieldValue = false;
+              }
+              // Try to convert to number if applicable
+              else if (!isNaN(fieldValue)) {
+                fieldValue = Number(fieldValue);
+              }
+            } else if (fieldValueEl.type === 'number') {
+              fieldValue = Number(fieldValue);
+            } else if (fieldValueEl.type === 'checkbox') {
+              fieldValue = fieldValueEl.checked;
             }
-            // If value is JSON, parse it
-            else if ((fieldValue.startsWith('{') && fieldValue.endsWith('}')) || 
-                   (fieldValue.startsWith('[') && fieldValue.endsWith(']'))) {
-              parsedValue = JSON.parse(fieldValue);
-            }
-          } catch (e) {
-            console.warn('Failed to parse value for field', fieldId, e);
+            
+            // Add to payload
+            payload.fields[fieldId] = fieldValue;
           }
-          
-          payload.fields[fieldId] = parsedValue;
         }
       });
       
@@ -318,6 +396,12 @@ document.addEventListener('DOMContentLoaded', function() {
         data.customFieldsArray.forEach(field => {
           createCustomFieldRow(field);
         });
+      } else {
+        // Show message when no fields configured
+        const noFieldsMessage = document.createElement('p');
+        noFieldsMessage.className = 'no-fields-message';
+        noFieldsMessage.textContent = 'No custom fields configured. Visit the Options page to add custom fields.';
+        customFieldsContainer.appendChild(noFieldsMessage);
       }
     });
   }
@@ -327,26 +411,198 @@ document.addEventListener('DOMContentLoaded', function() {
     const newRow = document.createElement('div');
     newRow.className = 'custom-field-row';
     
+    // Add field name label if available
+    if (field.name) {
+      const fieldLabel = document.createElement('div');
+      fieldLabel.className = 'field-name-label';
+      fieldLabel.textContent = field.name;
+      newRow.appendChild(fieldLabel);
+    }
+    
     const fieldInputs = document.createElement('div');
     fieldInputs.className = 'field-inputs';
     
     const fieldIdInput = document.createElement('input');
     fieldIdInput.type = 'text';
     fieldIdInput.className = 'custom-field-id';
-    fieldIdInput.value = field.name || 'Env';
+    fieldIdInput.value = field.name || field.id;
+    fieldIdInput.title = field.id; // Store original ID in title for later retrieval
     fieldIdInput.readOnly = true;
-    fieldIdInput.title = field.id;
     fieldInputs.appendChild(fieldIdInput);
     
-    const fieldValueInput = document.createElement('input');
-    fieldValueInput.type = 'text';
-    fieldValueInput.className = 'custom-field-value';
-    fieldValueInput.value = field.value || '';
-    fieldValueInput.placeholder = 'Field Value';
+    // Create appropriate input based on field metadata
+    let fieldValueInput;
+    
+    // First check if we have allowedValues for a dropdown
+    if (field.allowedValues && field.allowedValues.length > 0) {
+      // Create select dropdown
+      fieldValueInput = document.createElement('select');
+      fieldValueInput.className = 'custom-field-value';
+      
+      // Add empty option
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = '-- Select --';
+      fieldValueInput.appendChild(emptyOption);
+      
+      // Add allowed values as options
+      field.allowedValues.forEach(option => {
+        const optElement = document.createElement('option');
+        optElement.value = option.id || option.value || option;
+        optElement.textContent = option.name || option.value || option.id || option;
+        
+        // Set selected if matches the field value
+        if (field.value && (field.value === option.id || field.value === option.value || field.value === option)) {
+          optElement.selected = true;
+        }
+        
+        fieldValueInput.appendChild(optElement);
+      });
+    } else if (field.options && field.options.length > 0) {
+      // Create select with predefined options
+      fieldValueInput = document.createElement('select');
+      fieldValueInput.className = 'custom-field-value';
+      
+      // Add empty option
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = '-- Select --';
+      fieldValueInput.appendChild(emptyOption);
+      
+      // Add saved options
+      field.options.forEach(option => {
+        const optElement = document.createElement('option');
+        optElement.value = option.value;
+        optElement.textContent = option.text || option.value;
+        
+        // If this was the selected option, select it
+        if (option.selected || field.value === option.value) {
+          optElement.selected = true;
+        }
+        
+        fieldValueInput.appendChild(optElement);
+      });
+    } else if (field.schema && field.schema.type) {
+      // Use schema type to determine input type
+      switch (field.schema.type) {
+        case 'date':
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'date';
+          fieldValueInput.className = 'custom-field-value';
+          break;
+          
+        case 'datetime':
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'datetime-local';
+          fieldValueInput.className = 'custom-field-value';
+          break;
+          
+        case 'number':
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'number';
+          fieldValueInput.className = 'custom-field-value';
+          break;
+          
+        case 'boolean':
+          // Create a select for booleans
+          fieldValueInput = document.createElement('select');
+          fieldValueInput.className = 'custom-field-value';
+          
+          const emptyOption = document.createElement('option');
+          emptyOption.value = '';
+          emptyOption.textContent = '-- Select --';
+          
+          const trueOption = document.createElement('option');
+          trueOption.value = 'true';
+          trueOption.textContent = 'Yes';
+          
+          const falseOption = document.createElement('option');
+          falseOption.value = 'false';
+          falseOption.textContent = 'No';
+          
+          fieldValueInput.appendChild(emptyOption);
+          fieldValueInput.appendChild(trueOption);
+          fieldValueInput.appendChild(falseOption);
+          
+          if (field.value === 'true') {
+            trueOption.selected = true;
+          } else if (field.value === 'false') {
+            falseOption.selected = true;
+          }
+          break;
+          
+        default:
+          // Default to text input
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'text';
+          fieldValueInput.className = 'custom-field-value';
+      }
+    } else if (field.inputType) {
+      // Use inputType if available
+      switch (field.inputType) {
+        case 'date':
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'date';
+          fieldValueInput.className = 'custom-field-value';
+          break;
+          
+        case 'datetime-local':
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'datetime-local';
+          fieldValueInput.className = 'custom-field-value';
+          break;
+          
+        case 'number':
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'number';
+          fieldValueInput.className = 'custom-field-value';
+          break;
+          
+        case 'select':
+          fieldValueInput = document.createElement('select');
+          fieldValueInput.className = 'custom-field-value';
+          const emptyOption = document.createElement('option');
+          emptyOption.value = '';
+          emptyOption.textContent = '-- Select --';
+          fieldValueInput.appendChild(emptyOption);
+          break;
+          
+        default:
+          // Default to text input
+          fieldValueInput = document.createElement('input');
+          fieldValueInput.type = 'text';
+          fieldValueInput.className = 'custom-field-value';
+      }
+    } else {
+      // Default to text input
+      fieldValueInput = document.createElement('input');
+      fieldValueInput.type = 'text';
+      fieldValueInput.className = 'custom-field-value';
+    }
+    
+    // Set value if provided and it's not a select that already has its options set
+    if (field.value && (!field.options || fieldValueInput.tagName !== 'SELECT' || !field.options.some(o => o.selected))) {
+      fieldValueInput.value = field.value;
+    }
+    
+    fieldValueInput.placeholder = 'Value';
     fieldInputs.appendChild(fieldValueInput);
+    
+    // Add type information if available
+    if (field.schema && field.schema.type) {
+      const fieldInfo = document.createElement('div');
+      fieldInfo.className = 'field-info';
+      fieldInfo.textContent = field.schema.type;
+      if (field.schema.custom) {
+        fieldInfo.textContent += ' (' + field.schema.custom + ')';
+      }
+      newRow.appendChild(fieldInfo);
+    }
     
     newRow.appendChild(fieldInputs);
     customFieldsContainer.appendChild(newRow);
+    
+    return newRow;
   }
 
   // Show status message
