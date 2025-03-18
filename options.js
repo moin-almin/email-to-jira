@@ -297,142 +297,171 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Display fields in the container
   function displayFields(fields, container) {
+    // Clear the container first
     container.innerHTML = '';
     
-    if (fields.length === 0) {
-      container.innerHTML = '<p>No fields match your search criteria.</p>';
-      return;
-    }
-    
-    // Sort fields alphabetically by name
-    fields.sort((a, b) => a.name.localeCompare(b.name));
-    
-    // Group fields by custom vs standard
+    // Sort fields into custom and standard
     const customFields = fields.filter(field => field.custom);
     const standardFields = fields.filter(field => !field.custom);
     
-    // Display custom fields first (most likely what users want)
-    if (customFields.length > 0) {
-      const customHeader = document.createElement('h3');
-      customHeader.textContent = 'Custom Fields';
-      customHeader.style.fontSize = '14px';
-      customHeader.style.margin = '10px 0 5px 0';
-      container.appendChild(customHeader);
-      
-      customFields.forEach(field => addFieldToContainer(field, container));
-    }
-    
-    if (standardFields.length > 0) {
-      const standardHeader = document.createElement('h3');
-      standardHeader.textContent = 'Standard Fields';
-      standardHeader.style.fontSize = '14px';
-      standardHeader.style.margin = '15px 0 5px 0';
-      container.appendChild(standardHeader);
-      
-      standardFields.forEach(field => addFieldToContainer(field, container));
-    }
-  }
-  
-  // Add individual field to container
-  function addFieldToContainer(field, container) {
-    const fieldItem = document.createElement('div');
-    fieldItem.className = 'field-item';
-    
-    const fieldId = document.createElement('div');
-    fieldId.className = 'field-id';
-    fieldId.textContent = field.id;
-    
-    const buttonGroup = document.createElement('div');
-    buttonGroup.className = 'field-button-group';
-    
-    // Copy button
-    const copyButton = document.createElement('button');
-    copyButton.className = 'copy-button';
-    copyButton.textContent = 'Copy ID';
-    copyButton.addEventListener('click', function() {
-      navigator.clipboard.writeText(field.id).then(() => {
-        copyButton.textContent = 'Copied!';
-        setTimeout(() => {
-          copyButton.textContent = 'Copy ID';
-        }, 1500);
-      });
-    });
-    
-    // Add to form button
-    const addButton = document.createElement('button');
-    addButton.className = 'add-button';
-    addButton.textContent = 'Add to Form';
-    addButton.addEventListener('click', function() {
-      const fieldData = {
-        id: field.id,
-        value: '',
-        name: field.name,
-        readonly: true
-      };
-      
-      createCustomFieldRow(fieldData);
-      saveCustomFields();
-      
-      // Add success feedback
-      addButton.textContent = 'Added!';
-      setTimeout(() => {
-        addButton.textContent = 'Add to Form';
-      }, 1500);
-    });
-    
-    buttonGroup.appendChild(copyButton);
-    buttonGroup.appendChild(addButton);
-    fieldId.appendChild(buttonGroup);
-    fieldItem.appendChild(fieldId);
-    
-    const fieldName = document.createElement('div');
-    fieldName.className = 'field-name';
-    fieldName.textContent = field.name;
-    fieldItem.appendChild(fieldName);
-    
-    if (field.schema && field.schema.type) {
-      const fieldType = document.createElement('div');
-      fieldType.className = 'field-type';
-      
-      // Get the type information
-      let typeText = `Type: ${field.schema.type}`;
-      if (field.schema.custom) {
-        typeText += ` (${field.schema.custom})`;
+    // Get current custom fields to check which ones are already added
+    chrome.storage.sync.get(['customFieldsArray', 'customFieldsJson'], function(data) {
+      const currentFields = data.customFieldsArray || [];
+      const currentFieldIds = currentFields.map(f => f.id);
+      const customFieldsJsonObj = data.customFieldsJson ? JSON.parse(data.customFieldsJson) : {};
+
+      // Display custom fields first
+      if (customFields.length > 0) {
+        const customTitle = document.createElement('h3');
+        customTitle.textContent = 'Custom Fields';
+        container.appendChild(customTitle);
+        
+        customFields.forEach(field => {
+          const fieldDiv = createFieldItem(field, currentFieldIds, customFieldsJsonObj);
+          container.appendChild(fieldDiv);
+        });
       }
       
-      // Add value format hint
-      typeText += ` • Format: ${getFormatHint(field)}`;
-      
-      fieldType.textContent = typeText;
-      fieldItem.appendChild(fieldType);
-    }
-    
-    container.appendChild(fieldItem);
+      // Display standard fields
+      if (standardFields.length > 0) {
+        const standardTitle = document.createElement('h3');
+        standardTitle.textContent = 'Standard Fields';
+        container.appendChild(standardTitle);
+        
+        standardFields.forEach(field => {
+          const fieldDiv = createFieldItem(field, currentFieldIds, customFieldsJsonObj);
+          container.appendChild(fieldDiv);
+        });
+      }
+    });
   }
-  
-  // Get format hint based on field type
-  function getFormatHint(field) {
-    if (!field.schema) return 'text';
+
+  // Helper function to create a field item
+  function createFieldItem(field, currentFieldIds, customFieldsJsonObj) {
+    const fieldDiv = document.createElement('div');
+    fieldDiv.className = 'field-item';
     
-    const type = field.schema.type;
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `field-${field.id}`;
+    checkbox.checked = currentFieldIds.includes(field.id);
     
-    if (type === 'string') {
-      return 'text';
-    } else if (type === 'number') {
-      return 'number (no quotes)';
-    } else if (type === 'date' || type === 'datetime') {
-      return 'YYYY-MM-DD';
-    } else if (type === 'option') {
-      return 'JSON object';
-    } else if (type === 'array') {
-      return 'JSON array';
-    } else if (type === 'user') {
-      return 'JSON object';
-    } else if (type === 'boolean') {
-      return 'true/false';
-    } else {
-      return 'text';
-    }
+    const label = document.createElement('label');
+    label.htmlFor = `field-${field.id}`;
+    label.innerHTML = `<strong>${field.name}</strong> (${field.id})<br>
+                     <span class="field-type">Type: ${field.schema?.type || 'unknown'} ${field.schema?.custom ? '• Format: ' + field.schema.custom : ''}</span>`;
+    
+    fieldDiv.appendChild(checkbox);
+    fieldDiv.appendChild(label);
+    
+    // Add change listener to checkbox
+    checkbox.addEventListener('change', function() {
+      if (this.checked) {
+        // Add field to custom fields
+        addFieldToCustomFields({
+          id: field.id,
+          name: field.name,
+          type: field.schema?.type || 'unknown',
+          custom: field.schema?.custom || 'standard',
+          value: customFieldsJsonObj[field.id] || ''
+        });
+      } else {
+        // Remove field from custom fields
+        removeFieldFromCustomFields(field.id);
+      }
+      
+      // Update the custom fields JSON textarea
+      updateCustomFieldsJson();
+    });
+    
+    return fieldDiv;
+  }
+
+  // Helper function to update custom fields JSON
+  function updateCustomFieldsJson() {
+    const customFields = [];
+    document.querySelectorAll('#default-custom-fields-container .custom-field-row').forEach(row => {
+      const fieldId = row.querySelector('.custom-field-id');
+      const fieldValue = row.querySelector('.custom-field-value');
+      
+      if (fieldId && fieldValue && fieldId.value.trim()) {
+        customFields.push({
+          id: fieldId.value.trim(),
+          value: fieldValue.value.trim(),
+          name: row.querySelector('.field-name-label')?.textContent || '',
+          readonly: fieldId.readOnly
+        });
+      }
+    });
+    
+    const customFieldsJson = {};
+    customFields.forEach(field => {
+      customFieldsJson[field.id] = field.value;
+    });
+    
+    const jsonString = JSON.stringify(customFieldsJson, null, 2);
+    customFieldsInput.value = jsonString;
+    
+    // Save to storage
+    chrome.storage.sync.set({ 
+      customFieldsArray: customFields,
+      customFields: customFields,
+      customFieldsJson: jsonString
+    });
+  }
+
+  // Helper function to add a field to custom fields
+  function addFieldToCustomFields(field) {
+    chrome.storage.sync.get(['customFieldsArray', 'customFieldsJson'], function(data) {
+      const customFields = data.customFieldsArray || [];
+      const customFieldsJsonObj = data.customFieldsJson ? JSON.parse(data.customFieldsJson) : {};
+      
+      if (!customFields.find(f => f.id === field.id)) {
+        customFields.push(field);
+        
+        // Create the field row in the container
+        createCustomFieldRow(field);
+        
+        // Update storage
+        chrome.storage.sync.set({ 
+          customFieldsArray: customFields,
+          customFields: customFields,
+          customFieldsJson: JSON.stringify(customFieldsJsonObj, null, 2)
+        }, function() {
+          // Update the JSON textarea
+          updateCustomFieldsJson();
+        });
+      }
+    });
+  }
+
+  // Helper function to remove a field from custom fields
+  function removeFieldFromCustomFields(fieldId) {
+    chrome.storage.sync.get(['customFieldsArray', 'customFieldsJson'], function(data) {
+      const customFields = data.customFieldsArray || [];
+      const customFieldsJsonObj = data.customFieldsJson ? JSON.parse(data.customFieldsJson) : {};
+      
+      const updatedFields = customFields.filter(f => f.id !== fieldId);
+      
+      // Remove the field row from the container
+      const rows = defaultCustomFieldsContainer.querySelectorAll('.custom-field-row');
+      rows.forEach(row => {
+        const idInput = row.querySelector('.custom-field-id');
+        if (idInput && idInput.value === fieldId) {
+          row.remove();
+        }
+      });
+      
+      // Update storage
+      chrome.storage.sync.set({ 
+        customFieldsArray: updatedFields,
+        customFields: updatedFields,
+        customFieldsJson: JSON.stringify(customFieldsJsonObj, null, 2)
+      }, function() {
+        // Update the JSON textarea
+        updateCustomFieldsJson();
+      });
+    });
   }
   
   // Add new custom field row
