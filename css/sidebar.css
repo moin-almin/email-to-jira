@@ -134,7 +134,11 @@ button:active {
 
 .custom-field-id {
   flex: 1;
-  background-color: #F4F5F7;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  color: #172b4d;
+  font-weight: 500;
   cursor: default;
   user-select: none;
 }

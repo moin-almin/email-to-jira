@@ -327,22 +327,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const newRow = document.createElement('div');
     newRow.className = 'custom-field-row';
     
-    if (field.name) {
-      const fieldLabel = document.createElement('div');
-      fieldLabel.className = 'field-name-label';
-      fieldLabel.textContent = field.name;
-      newRow.appendChild(fieldLabel);
-    }
-    
     const fieldInputs = document.createElement('div');
     fieldInputs.className = 'field-inputs';
     
     const fieldIdInput = document.createElement('input');
     fieldIdInput.type = 'text';
     fieldIdInput.className = 'custom-field-id';
-    fieldIdInput.value = field.id;
+    fieldIdInput.value = field.name || 'Env';
     fieldIdInput.readOnly = true;
-    fieldIdInput.title = field.name || field.id;
+    fieldIdInput.title = field.id;
     fieldInputs.appendChild(fieldIdInput);
     
     const fieldValueInput = document.createElement('input');
