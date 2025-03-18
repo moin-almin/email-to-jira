@@ -1,10 +1,12 @@
 /* Base Styles */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   margin: 0;
   padding: 0;
-  background-color: #f5f5f5;
-  color: #333;
+  background-color: #f8f9fa;
+  color: #1a1f36;
   font-size: 13px;
   height: 100vh;
   overflow: hidden;
@@ -17,20 +19,22 @@ body {
   display: flex;
   flex-direction: column;
   background-color: #fff;
-  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-header {
   padding: 12px 16px;
-  border-bottom: 1px solid #ddd;
-  background-color: #f5f7fa;
+  border-bottom: 1px solid #e9ecef;
+  background-color: #ffffff;
 }
 
 .sidebar-header h1 {
   font-size: 18px;
   text-align: center;
   margin: 0;
-  color: #0052cc;
+  color: #1e293b;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .sidebar-content {
@@ -41,8 +45,8 @@ body {
 
 .sidebar-footer {
   padding: 12px 16px;
-  border-top: 1px solid #ddd;
-  background-color: #f5f7fa;
+  border-top: 1px solid #e9ecef;
+  background-color: #ffffff;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -51,59 +55,57 @@ body {
 h2 {
   font-size: 15px;
   margin: 0 0 10px 0;
-  color: #172b4d;
+  color: #1e293b;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 /* Form Styles */
 .form-group {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 label {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   font-weight: 500;
-  color: #172b4d;
+  color: #4a5568;
   font-size: 12px;
+  letter-spacing: -0.01em;
 }
 
 input, select, textarea {
   width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
   font-size: 13px;
   box-sizing: border-box;
-}
-
-textarea {
-  min-height: 60px;
-  resize: vertical;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s ease;
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: #0052cc;
+  border-color: #3182ce;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.2);
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.1);
 }
 
 button {
-  background-color: #0052cc;
+  background-color: #3182ce;
   color: white;
   border: none;
-  padding: 7px 12px;
-  border-radius: 4px;
+  padding: 8px 14px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
-  transition: background-color 0.2s;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  font-family: 'Inter', sans-serif;
 }
 
 button:hover {
-  background-color: #0065ff;
-}
-
-button:active {
-  background-color: #0047b3;
+  background-color: #2c5282;
 }
 
 /* Custom Fields Section */
@@ -137,10 +139,12 @@ button:active {
   background: none;
   border: none;
   padding: 6px 0;
-  color: #172b4d;
+  color: #4a5568;
   font-weight: 500;
   cursor: default;
   user-select: none;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.01em;
 }
 
 .custom-field-value {
@@ -149,17 +153,17 @@ button:active {
 
 /* Button styles for Extract Email and Create Ticket */
 #extract-from-email {
-  background-color: #FF8B00;
+  background-color: #ed8936;
   width: 100%;
   margin-bottom: 8px;
 }
 
 #extract-from-email:hover {
-  background-color: #FF9F30;
+  background-color: #dd6b20;
 }
 
 #create-ticket {
-  background-color: #0052CC;
+  background-color: #3182ce;
   width: 100%;
 }
 
@@ -172,26 +176,26 @@ button:active {
 }
 
 .success {
-  background-color: #e3fcef;
-  color: #006644;
-  border: 1px solid #00b368;
+  background-color: #f0fff4;
+  color: #2f855a;
+  border: 1px solid #9ae6b4;
 }
 
 .error {
-  background-color: #ffebe6;
-  color: #de350b;
-  border: 1px solid #ff5630;
+  background-color: #fff5f5;
+  color: #c53030;
+  border: 1px solid #feb2b2;
 }
 
 /* Options button */
 #options-btn {
-  background-color: #6554c0;
+  background-color: #5a67d8;
   font-size: 12px;
-  padding: 5px 10px;
+  padding: 6px 12px;
 }
 
 #options-btn:hover {
-  background-color: #8777d9;
+  background-color: #4c51bf;
 }
 
 /* Tooltip */
@@ -212,11 +216,13 @@ button:active {
 /* Developer credit */
 .developer-credit {
   font-size: 11px;
-  color: #6B778C;
+  color: #718096;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .developer-credit strong {
-  color: #172b4d;
+  color: #2d3748;
   font-weight: 600;
 }
 
