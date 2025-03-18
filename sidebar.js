@@ -297,9 +297,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // Load saved project key and restore custom fields
   function loadSavedData() {
     // Load project key
-    chrome.storage.sync.get('projectKey', function(data) {
+    chrome.storage.sync.get(['projectKey', 'defaultProject'], function(data) {
       if (data.projectKey) {
         projectKeyInput.value = data.projectKey;
+      } else if (data.defaultProject) {
+        projectKeyInput.value = data.defaultProject;
       }
     });
     
